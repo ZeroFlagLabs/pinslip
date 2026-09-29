@@ -9,10 +9,9 @@ import (
 )
 
 // ExcerptMaxRunes 是摘要的最大字符数（超出截断并补省略号）。
-// 取 240 兼顾两档列表预览：折叠态 line-clamp 3 行（≈60 字符）、
-// 展开态 line-clamp 10 行（≈200 字符），240 留有余量；MCP list_notes
-// 预览同源，长度仍有界。
-const ExcerptMaxRunes = 240
+// 取 300 兼顾两档列表预览：折叠态 line-clamp 3 行（≈60 字符）、
+// 展开态限高 15 行（≈300 字符）；MCP list_notes 预览同源，长度仍有界。
+const ExcerptMaxRunes = 300
 
 var (
 	// 行首块级标记：标题 #、引用 >、无序/有序/任务列表、代码块围栏

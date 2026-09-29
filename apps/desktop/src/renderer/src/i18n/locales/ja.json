@@ -229,6 +229,8 @@
     "autoSync": "自動同期",
     "minutes": "分",
     "autoSyncAria": "自動同期の間隔（分）",
+    "syncOnChange": "変更時に自動同期",
+    "syncOnChangeHint": "操作をやめて約 3 分後に自動同期（commit+pull+push）します。定期サイクルは引き続きフォールバックとして動作します",
     "conflictFiles": "要解決の競合 {{count}} ファイル",
     "conflictEtc": " ほか",
     "syncNow": "今すぐ同期",

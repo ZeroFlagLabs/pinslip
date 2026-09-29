@@ -29,6 +29,9 @@ type SyncConfig struct {
 	Enabled  bool   `json:"enabled"`
 	// PushIntervalMin 自动推拉间隔（分钟）；0/越界在 normalize 回退默认 10
 	PushIntervalMin int `json:"pushIntervalMin,omitempty"`
+	// SyncOnChange 为 true 时文件变更防抖后直接跑一轮完整同步
+	//（commit+pull+push），false（缺省）维持防抖只 commit、推送等定时循环
+	SyncOnChange bool `json:"syncOnChange,omitempty"`
 	// Adopt 是一次性认领标志：仅当 Connect 报 SYNC_LOCAL_NOT_PINSLIP_REPO
 	//（vault 已是 git 仓库但缺 .pinslip-repo 标记）时生效——用户显式确认后
 	// 创建标记并提交，完成接入。绝不落盘（saveSyncConfig 强制剥离），

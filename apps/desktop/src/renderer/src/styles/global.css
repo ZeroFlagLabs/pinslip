@@ -2138,12 +2138,12 @@ input.sticky-note__title-input {
   user-select: text;
 }
 
-/* 展开态：不再 clamp，限高 10 行 + 内部滚动（超长摘要尾部可滚动查看，
+/* 展开态：不再 clamp，限高 15 行 + 内部滚动（超长摘要尾部可滚动查看，
    条目高度整齐；滚轮悬停会被预览接管，超出最多一两行，代价可忽略） */
 .note-list__preview.is-expanded {
   -webkit-line-clamp: unset;
   display: block;
-  max-height: 168px; /* 12px × 1.4 × 10 行 */
+  max-height: 252px; /* 12px × 1.4 × 15 行 */
   overflow-y: auto;
 }
 

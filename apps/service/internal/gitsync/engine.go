@@ -2,6 +2,7 @@
 //
 //	启动 pull（已配置时）→ watching
 //	  │ 文件变更防抖 3 分钟无变更 → auto-commit
+//	  │   （syncOnChange 开启时改跑一轮完整 commit+pull+push，同一 opMu 串行）
 //	  │ 定时（可配 pushIntervalMin，默认 10 分钟）→ commit + pull + push（push 前必 pull）
 //	  │ 失败 backoff 1m→5m→15m 封顶，恢复自动追上
 //	Stop 时给 5s 窗口尽力 push，失败不拦退出。
@@ -115,7 +116,7 @@ func (e *Engine) startLocked() {
 			filepath.Join(e.vaultDir, "attachments"),
 		},
 		e.debounce,
-		func() { e.autoCommit() },
+		func() { e.onChangeDebounce() },
 		func(err error) { e.logger.Error("git 同步目录监听错误", "error", err) },
 	)
 	if err != nil {
@@ -309,6 +310,22 @@ func (e *Engine) failCycle(code, op string, err error) error {
 	return err
 }
 
+// onChangeDebounce 防抖触发入口：按配置分流——syncOnChange 开启时直接跑一轮
+// 完整同步（commit+pull+push），否则维持只 commit 的现状。回调跑在 watch 包
+// 自己的 goroutine 上（不在 run 循环里），直调 syncCycle 不会与循环自死锁：
+// 两侧只靠 opMu 串行（同 SyncNow 未运行分支的直跑模式）。失败已由 syncCycle
+// 落 lastError 并记日志，退避重试交给定时循环兜底。
+func (e *Engine) onChangeDebounce() {
+	e.mu.RLock()
+	full := e.cfg != nil && e.cfg.SyncOnChange
+	e.mu.RUnlock()
+	if full {
+		_ = e.syncCycle()
+		return
+	}
+	e.autoCommit()
+}
+
 // autoCommit 防抖触发：只提交，不推送（推送走 10 分钟定时器）。
 func (e *Engine) autoCommit() {
 	e.opMu.Lock()
@@ -438,6 +455,8 @@ type Status struct {
 	ConflictedFiles []string `json:"conflictedFiles"`
 	// PushIntervalMin 当前生效的自动推拉间隔（分钟）
 	PushIntervalMin int `json:"pushIntervalMin"`
+	// SyncOnChange 有变更时自动同步（防抖后跑完整 commit+pull+push）
+	SyncOnChange bool `json:"syncOnChange"`
 
 	// 分叉参考信息：仅 LastErrorCode == SYNC_UNRELATED_HISTORIES 时计算，
 	// 供渲染层分叉接管面板展示（详见 divergence.go）；非分叉状态一律缺省。
@@ -467,6 +486,7 @@ func (e *Engine) GetStatus() Status {
 		st.Username = e.cfg.Username
 		st.Branch = e.cfg.Branch
 		st.PushIntervalMin = e.cfg.PushIntervalMin
+		st.SyncOnChange = e.cfg.SyncOnChange
 	}
 	repo := e.repo
 	e.mu.RUnlock()

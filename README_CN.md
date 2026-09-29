@@ -131,6 +131,14 @@ pinslip/
 - [CHANGELOG](docs/CHANGELOG.md) — 版本变更记录
 - [API 契约](docs/api.md) — 本地服务 HTTP 接口
 
+## 贡献者
+
+感谢每一位为 PinSlip 添砖加瓦的朋友 💛
+
+<a href="https://github.com/homerious/pinslip/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=homerious/pinslip" />
+</a>
+
 ## License
 
 MIT

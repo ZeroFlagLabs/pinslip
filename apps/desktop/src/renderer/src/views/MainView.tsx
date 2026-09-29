@@ -31,6 +31,7 @@ import ArrowsClockwiseIcon from '~icons/ph/arrows-clockwise';
 import ArrowSquareOutIcon from '~icons/ph/arrow-square-out';
 import InfoIcon from '~icons/ph/info';
 import GitBranchIcon from '~icons/ph/git-branch';
+import LightningIcon from '~icons/ph/lightning';
 import WarningIcon from '~icons/ph/warning';
 import RobotIcon from '~icons/ph/robot';
 import LinkIcon from '~icons/ph/link';
@@ -831,6 +832,34 @@ export default function MainView() {
       .finally(() => setSyncBusy(false));
   }, [syncIntervalInput, syncStatus, syncForm, syncBusy]);
 
+  // 「有变更时自动同步」开关（状态态）：乐观切换，失败回滚。即改即存复用
+  // PUT /api/sync/config（url/username/branch 用服务端生效值，token 空串 =
+  // 不修改已存凭证，enabled 保持）；Go 侧 Reconfigure 停旧循环起新循环即时生效
+  const toggleSyncOnChange = useCallback(() => {
+    if (!syncStatus || syncBusy) return;
+    const next = !syncStatus.syncOnChange;
+    setSyncStatus({ ...syncStatus, syncOnChange: next });
+    setSyncBusy(true);
+    syncApi
+      .saveConfig({
+        url: syncStatus.url ?? '',
+        username: syncStatus.username ?? '',
+        token: '', // 空串 = 不修改已存 token
+        branch: syncStatus.branch || 'main',
+        enabled: syncStatus.enabled,
+        syncOnChange: next,
+      })
+      .then(setSyncStatus)
+      // PUT 失败（多为接入失败）：Go 侧配置已先落盘，拉一次状态对齐真实生效值
+      .catch(() =>
+        syncApi
+          .getStatus()
+          .then(setSyncStatus)
+          .catch(() => setSyncStatus((st) => (st ? { ...st, syncOnChange: !next } : st))),
+      )
+      .finally(() => setSyncBusy(false));
+  }, [syncStatus, syncBusy]);
+
   // 停用同步：两阶段确认；保留 .git 与已存凭证
   const disableSync = useCallback(() => {
     if (!syncDisableConfirm) {
@@ -1464,6 +1493,22 @@ export default function MainView() {
                       </span>
                     </div>
                   )}
+                  {/* 有变更时自动同步：防抖后跑完整 commit+pull+push，定时循环仍作兜底 */}
+                  <div className="settings-panel__row">
+                    <LightningIcon className="settings-panel__row-icon" />
+                    <span className="settings-panel__label">{t('sync.syncOnChange')}</span>
+                    <button
+                      className="settings-toggle"
+                      role="switch"
+                      aria-checked={syncStatus.syncOnChange ?? false}
+                      data-on={syncStatus.syncOnChange ?? false}
+                      disabled={syncBusy}
+                      title={t('sync.syncOnChangeHint')}
+                      onClick={toggleSyncOnChange}
+                    >
+                      <span className="settings-toggle__thumb" />
+                    </button>
+                  </div>
                   {syncStatus.conflictedFiles.length > 0 && (
                     <div className="settings-panel__row">
                       <WarningIcon className="settings-panel__row-icon settings-panel__row-icon--danger" />

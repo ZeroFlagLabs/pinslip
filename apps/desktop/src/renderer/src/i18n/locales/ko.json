@@ -229,6 +229,8 @@
     "autoSync": "자동 동기화",
     "minutes": "분",
     "autoSyncAria": "자동 동기화 간격(분)",
+    "syncOnChange": "변경 시 자동 동기화",
+    "syncOnChangeHint": "작업을 멈춘 후 약 3분 뒤 자동 동기화(commit+pull+push)되며, 주기적 사이클은 계속 폴백으로 동작합니다",
     "conflictFiles": "충돌 해결 필요 {{count}}개 파일",
     "conflictEtc": " 외",
     "syncNow": "지금 동기화",

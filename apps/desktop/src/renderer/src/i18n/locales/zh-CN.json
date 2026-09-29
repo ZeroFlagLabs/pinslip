@@ -229,6 +229,8 @@
     "autoSync": "自动同步",
     "minutes": "分钟",
     "autoSyncAria": "自动同步间隔（分钟）",
+    "syncOnChange": "有变更时自动同步",
+    "syncOnChangeHint": "停手约 3 分钟后自动同步（commit+pull+push），定时循环仍作兜底",
     "conflictFiles": "待解冲突 {{count}} 个文件",
     "conflictEtc": " 等",
     "syncNow": "立即同步",

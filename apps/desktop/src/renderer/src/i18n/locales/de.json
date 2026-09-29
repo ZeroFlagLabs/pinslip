@@ -229,6 +229,8 @@
     "autoSync": "Auto-Sync",
     "minutes": "Min.",
     "autoSyncAria": "Auto-Sync-Intervall (Minuten)",
+    "syncOnChange": "Bei Änderungen synchronisieren",
+    "syncOnChangeHint": "Synchronisiert automatisch (Commit+Pull+Push) ca. 3 Minuten nach der letzten Eingabe; der Zeitzyklus bleibt als Fallback aktiv",
     "conflictFiles": "{{count}} Dateien mit Konflikten",
     "conflictEtc": " usw.",
     "syncNow": "Jetzt synchronisieren",

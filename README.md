@@ -146,6 +146,14 @@ pinslip/
 - [CHANGELOG](docs/CHANGELOG.md) — release history
 - [API Contract](docs/api.md) — local service HTTP endpoints
 
+## Contributors
+
+Thanks to everyone who has contributed to PinSlip 💛
+
+<a href="https://github.com/homerious/pinslip/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=homerious/pinslip" />
+</a>
+
 ## License
 
 MIT

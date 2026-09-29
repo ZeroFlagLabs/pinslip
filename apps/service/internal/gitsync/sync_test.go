@@ -671,6 +671,77 @@ func TestReconfigureSetsLastSyncAt(t *testing.T) {
 	}
 }
 
+// syncOnChange 行为：开启时防抖触发直接跑完整同步（远端即时可见）；
+// 关闭（缺省）时防抖只 commit（本地领先、远端无提交，推送等定时循环）。
+func TestEngineSyncOnChange(t *testing.T) {
+	newEngine := func(t *testing.T, vault string, syncOnChange bool) (*Engine, string) {
+		t.Helper()
+		eng, err := NewEngine(vault, tLogger{t})
+		if err != nil {
+			t.Fatal(err)
+		}
+		eng.debounce = 50 * time.Millisecond // 测试提速：防抖 50ms
+		eng.pushInterval = time.Hour         // 关掉定时 push，只测防抖路径
+		remote := newBareRemote(t)
+		cfg := testConfig(remote)
+		cfg.SyncOnChange = syncOnChange
+		if err := eng.Reconfigure(cfg); err != nil {
+			t.Fatalf("Reconfigure 失败: %v", err)
+		}
+		t.Cleanup(eng.Stop)
+		return eng, remote
+	}
+
+	t.Run("true", func(t *testing.T) {
+		vault := newVault(t)
+		eng, remote := newEngine(t, vault, true)
+		if st := eng.GetStatus(); !st.SyncOnChange {
+			t.Fatalf("Status.SyncOnChange 应为 true: %+v", st)
+		}
+
+		writeVaultFile(t, vault, "notes/on-change.md", []byte("变更触发同步\n"))
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if content, ok := remoteFileContent(t, remote, "notes/on-change.md"); ok && content == "变更触发同步\n" {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("防抖后远端应有提交: %+v", eng.GetStatus())
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if st := eng.GetStatus(); st.Ahead != 0 || st.LastError != "" {
+			t.Errorf("完整同步后 ahead 应归零且无错误: %+v", st)
+		}
+	})
+
+	t.Run("false", func(t *testing.T) {
+		vault := newVault(t)
+		eng, remote := newEngine(t, vault, false)
+		if st := eng.GetStatus(); st.SyncOnChange {
+			t.Fatalf("Status.SyncOnChange 应为 false: %+v", st)
+		}
+
+		writeVaultFile(t, vault, "notes/local-only.md", []byte("只本地提交\n"))
+		// 等防抖 auto-commit 落地（本地领先）
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			st := eng.GetStatus()
+			if st.Ahead > 0 && st.LastError == "" {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("auto-commit 未生效: %+v", st)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		// 远端不应有该文件（推送走定时循环，测试间隔 1h 不会触发）
+		if _, ok := remoteFileContent(t, remote, "notes/local-only.md"); ok {
+			t.Error("syncOnChange=false 时远端不应出现提交")
+		}
+	})
+}
+
 // 自动推拉间隔配置：normalize 把缺省/越界值拉回默认 10，合法值（1~1440）保留；
 // 引擎 currentPushInterval 跟随配置（测试覆盖优先），Status 透出当前生效值。
 func TestPushIntervalMinConfig(t *testing.T) {

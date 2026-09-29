@@ -161,12 +161,14 @@ token 不出现在任何接口响应与日志中。
   "token": "ghp_...",              // 空且 url 未变 = 沿用已存 token
   "branch": "main",                // 缺省 main
   "enabled": true,
-  "pushIntervalMin": 10 }          // 自动推拉间隔（分钟），越界回退默认 10
+  "pushIntervalMin": 10,           // 自动推拉间隔（分钟），越界回退默认 10
+  "syncOnChange": false }          // true = 变更防抖后跑完整 commit+pull+push；缺省 false = 只 commit
 
 // SyncStatus（GET /api/sync/status 响应）
 { "enabled": true, "configured": true, "url": "...", "username": "...",
   "branch": "main", "lastSyncAt": "...", "lastError": "", "lastErrorCode": "",
   "ahead": 0, "behind": 0, "conflictedFiles": [], "pushIntervalMin": 10,
+  "syncOnChange": false,
   // 分叉参考信息：仅 lastErrorCode == "SYNC_UNRELATED_HISTORIES" 时出现，
   // 全部基于本地数据（worktree + 最近一次 fetch 的 origin 引用），无网络请求；
   // 非分叉状态缺省。本地无 origin 引用时远端三字段同样缺省（容错）

@@ -229,6 +229,8 @@
     "autoSync": "Synchro auto",
     "minutes": "min",
     "autoSyncAria": "Intervalle de synchro automatique (minutes)",
+    "syncOnChange": "Synchro à chaque changement",
+    "syncOnChangeHint": "Synchronise automatiquement (commit+pull+push) environ 3 minutes après la fin des modifications ; le cycle périodique reste actif en secours",
     "conflictFiles": "{{count}} fichiers en conflit",
     "conflictEtc": " etc.",
     "syncNow": "Synchroniser",

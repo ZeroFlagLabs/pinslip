@@ -109,6 +109,8 @@ export interface SyncStatus {
   conflictedFiles: string[];
   /** 当前生效的自动推拉间隔（分钟） */
   pushIntervalMin: number;
+  /** 有变更时自动同步：防抖后跑完整 commit+pull+push（false = 防抖只 commit） */
+  syncOnChange: boolean;
   /** 分叉参考信息：仅 lastErrorCode === 'SYNC_UNRELATED_HISTORIES' 时出现——
    *  远端 head 是否含 .pinslip-repo 标记（false/缺省都不给接管入口） */
   remoteIsPinslip?: boolean;
@@ -130,6 +132,8 @@ export interface SaveSyncConfigInput {
   enabled: boolean;
   /** 自动推拉间隔（分钟，1~1440）；缺省/非法 Go 侧回退默认 10 */
   pushIntervalMin?: number;
+  /** 有变更时自动同步（缺省 false = 防抖只 commit 的现状） */
+  syncOnChange?: boolean;
   /**
    * 一次性认领标志：仅当接入报 SYNC_LOCAL_NOT_PINSLIP_REPO（本地已是 git
    * 仓库但缺 .pinslip-repo 标记）且用户显式确认时传 true——服务端创建标记

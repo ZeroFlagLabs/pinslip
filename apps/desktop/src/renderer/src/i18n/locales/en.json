@@ -229,6 +229,8 @@
     "autoSync": "Auto sync",
     "minutes": "min",
     "autoSyncAria": "Auto sync interval (minutes)",
+    "syncOnChange": "Sync on change",
+    "syncOnChangeHint": "Auto-syncs (commit+pull+push) about 3 minutes after you stop editing; the periodic cycle still runs as a fallback",
     "conflictFiles": "{{count}} files with conflicts",
     "conflictEtc": " etc.",
     "syncNow": "Sync now",
