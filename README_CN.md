@@ -135,12 +135,10 @@ pinslip/
 
 由 [@homerious](https://github.com/homerious) 打造，感谢社区每一位朋友 💛
 
-| | |
-| --- | --- |
-| [<img src="https://github.com/Gaald.png?size=40" width="40" alt="Gaald">](https://github.com/Gaald) | [@Gaald](https://github.com/Gaald) —— 记住用色、多行预览、KDE 修复等 4 个 PR，CachyOS 实测 |
-| [<img src="https://github.com/Keyhabit.png?size=40" width="40" alt="Keyhabit">](https://github.com/Keyhabit) | [@Keyhabit](https://github.com/Keyhabit) —— 拖拽图片、自定义标题、快捷键等 PR 与细致反馈 |
-| [<img src="https://github.com/onemast.png?size=40" width="40" alt="onemast">](https://github.com/onemast) | [@onemast](https://github.com/onemast) —— 托盘/任务栏开关、同步改进、对话框 i18n 反馈 |
-| [<img src="https://github.com/BigHairyWookie.png?size=40" width="40" alt="BigHairyWookie">](https://github.com/BigHairyWookie) | [@BigHairyWookie](https://github.com/BigHairyWookie) —— Linux 平铺 WM 兼容性反馈 |
+[<img src="https://github.com/Gaald.png?size=48" width="48" alt="Gaald">](https://github.com/Gaald)
+[<img src="https://github.com/Keyhabit.png?size=48" width="48" alt="Keyhabit">](https://github.com/Keyhabit)
+[<img src="https://github.com/onemast.png?size=48" width="48" alt="onemast">](https://github.com/onemast)
+[<img src="https://github.com/BigHairyWookie.png?size=48" width="48" alt="BigHairyWookie">](https://github.com/BigHairyWookie)
 
 ## License
 
