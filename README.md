@@ -148,11 +148,14 @@ pinslip/
 
 ## Contributors
 
-Thanks to everyone who has contributed to PinSlip 💛
+Built by [@homerious](https://github.com/homerious), with love from the community 💛
 
-<a href="https://github.com/homerious/pinslip/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=homerious/pinslip" />
-</a>
+| | |
+| --- | --- |
+| [<img src="https://github.com/Gaald.png?size=40" width="40" alt="Gaald">](https://github.com/Gaald) | [@Gaald](https://github.com/Gaald) — remember-last-color, multi-line previews, KDE identity fixes, Linux testing on CachyOS |
+| [<img src="https://github.com/Keyhabit.png?size=40" width="40" alt="Keyhabit">](https://github.com/Keyhabit) | [@Keyhabit](https://github.com/Keyhabit) — drag & drop images, manual note titles, blank-note shortcut, detailed feedback |
+| [<img src="https://github.com/onemast.png?size=40" width="40" alt="onemast">](https://github.com/onemast) | [@onemast](https://github.com/onemast) — tray/taskbar icon toggles, sync improvements, dialog i18n feedback |
+| [<img src="https://github.com/BigHairyWookie.png?size=40" width="40" alt="BigHairyWookie">](https://github.com/BigHairyWookie) | [@BigHairyWookie](https://github.com/BigHairyWookie) — Linux tiling-WM compatibility feedback |
 
 ## License
 
