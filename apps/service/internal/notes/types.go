@@ -5,20 +5,21 @@ import "time"
 
 // Note 是完整笔记（对应 docs/api.md 的 Note）。
 type Note struct {
-	ID        string    `json:"id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Tags      []string  `json:"tags"`
-	Source    string    `json:"source"`
-	Pin       bool     `json:"pin"`
-	Color     string   `json:"color"`
-	Collapsed bool     `json:"collapsed"`        // 折叠成标题条
-	Zoom      float64  `json:"zoom,omitempty"` // 内容缩放倍率（1.3 = 130%；缺省 = 100%）
-	Group     string   `json:"group"`            // 所属便签组 id（"" = 不属于任何组）
-	Inbox     bool     `json:"inbox"`
-	Folder    string   `json:"folder"` // notes/ 下的相对子目录，"" 为根目录
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	TitleManual bool      `json:"titleManual,omitempty"` // 手动标题标志（true = 用户重命名，正文保存不再自动推导）
+	Content     string    `json:"content"`
+	Tags        []string  `json:"tags"`
+	Source      string    `json:"source"`
+	Pin         bool      `json:"pin"`
+	Color       string    `json:"color"`
+	Collapsed   bool      `json:"collapsed"`      // 折叠成标题条
+	Zoom        float64   `json:"zoom,omitempty"` // 内容缩放倍率（1.3 = 130%；缺省 = 100%）
+	Group       string    `json:"group"`          // 所属便签组 id（"" = 不属于任何组）
+	Inbox       bool      `json:"inbox"`
+	Folder      string    `json:"folder"` // notes/ 下的相对子目录，"" 为根目录
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // Meta 是列表项（不含正文）。
@@ -54,17 +55,18 @@ type CreateFolderInput struct {
 // 所有字段均可选：未提供的字段保留原值（部分更新）。
 // content 为 nil 时保留原有正文（可用于单独更新 pin/tags 等元数据）。
 type SaveInput struct {
-	Content   *string  `json:"content,omitempty"`
-	Title     string   `json:"title,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
-	Pin       *bool    `json:"pin,omitempty"`
-	Source    string   `json:"source,omitempty"`
-	Color     string   `json:"color,omitempty"`     // 空字符串 = 保留原色
-	Collapsed *bool    `json:"collapsed,omitempty"` // nil = 保留原折叠状态
-	Group     *string  `json:"group,omitempty"`     // nil = 保留原便签组（"" = 移出组）
-	Folder    *string  `json:"folder,omitempty"`    // 仅新建时生效：落盘目录；已存在便签忽略（移动走 move API）
-	Inbox     *bool    `json:"inbox,omitempty"`     // 仅新建时生效：true = 落收集箱（浏览器插件剪藏等外部入口）
-	Zoom      *float64 `json:"zoom,omitempty"`      // 内容缩放倍率；nil = 保留，1（或 <=0）= 恢复默认并删除字段
+	Content     *string  `json:"content,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	TitleManual *bool    `json:"titleManual,omitempty"` // nil = 不触碰标志；true = 手动标题；false = 恢复自动（立即按正文重推导）
+	Tags        []string `json:"tags,omitempty"`
+	Pin         *bool    `json:"pin,omitempty"`
+	Source      string   `json:"source,omitempty"`
+	Color       string   `json:"color,omitempty"`     // 空字符串 = 保留原色
+	Collapsed   *bool    `json:"collapsed,omitempty"` // nil = 保留原折叠状态
+	Group       *string  `json:"group,omitempty"`     // nil = 保留原便签组（"" = 移出组）
+	Folder      *string  `json:"folder,omitempty"`    // 仅新建时生效：落盘目录；已存在便签忽略（移动走 move API）
+	Inbox       *bool    `json:"inbox,omitempty"`     // 仅新建时生效：true = 落收集箱（浏览器插件剪藏等外部入口）
+	Zoom        *float64 `json:"zoom,omitempty"`      // 内容缩放倍率；nil = 保留，1（或 <=0）= 恢复默认并删除字段
 }
 
 // RenameFolderInput 是 POST /api/folders/rename 的请求体。

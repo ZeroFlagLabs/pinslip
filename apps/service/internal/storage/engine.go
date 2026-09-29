@@ -215,7 +215,8 @@ func (e *Engine) Delete(id string) error {
 	return os.Remove(p)
 }
 
-// 允许的附件扩展名（图片粘贴场景，MIME 不可信，只认扩展名白名单）
+// 允许的附件扩展名（图片粘贴场景，MIME 不可信，只认扩展名白名单）。
+// 不收 SVG：可含脚本/外链资源的 XML，位图之外的渲染风险不随拖拽功能引入
 var attachExts = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
 }

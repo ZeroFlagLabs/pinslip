@@ -18,4 +18,13 @@ export const syncApi = {
 
   /** 立即同步一轮（commit+pull+push）；失败不抛错，错误体现在返回状态的 lastError */
   syncNow: () => request<SyncStatus>('/api/sync/now', { method: 'POST' }),
+
+  /** 分叉人工接管：local = 以本地为准 force-push 覆盖远端（远端历史被丢弃）；
+   *  remote = 本地内容备份到 .pinslip/backups/ 后检出远端版本。
+   *  前置校验失败（非分叉/远端无标记）抛 400；执行失败不抛错，体现在 lastError */
+  resolve: (strategy: 'local' | 'remote') =>
+    request<SyncStatus>('/api/sync/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ strategy }),
+    }),
 };

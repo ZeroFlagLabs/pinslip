@@ -4,6 +4,9 @@ import type { TFunction } from 'i18next';
 import PlusIcon from '~icons/ph/plus';
 import TrashIcon from '~icons/ph/trash';
 import TrayIcon from '~icons/ph/tray';
+import AppWindowIcon from '~icons/ph/app-window';
+import NoteIcon from '~icons/ph/note';
+import MoonIcon from '~icons/ph/moon';
 import GearSixIcon from '~icons/ph/gear-six';
 import PinIcon from '../components/icons/PinIcon';
 import FolderIcon from '~icons/ph/folder';
@@ -25,6 +28,7 @@ import CaretRightIcon from '~icons/ph/caret-right';
 import SortAscendingIcon from '~icons/ph/sort-ascending';
 import SortDescendingIcon from '~icons/ph/sort-descending';
 import ArrowsClockwiseIcon from '~icons/ph/arrows-clockwise';
+import ArrowSquareOutIcon from '~icons/ph/arrow-square-out';
 import InfoIcon from '~icons/ph/info';
 import GitBranchIcon from '~icons/ph/git-branch';
 import WarningIcon from '~icons/ph/warning';
@@ -35,12 +39,23 @@ import FileCodeIcon from '~icons/ph/file-code';
 import CopyIcon from '~icons/ph/copy';
 import CheckIcon from '~icons/ph/check';
 import ClipboardIcon from '~icons/ph/clipboard';
-import type { NoteMeta, SearchHit, SyncStatus, UpdateState } from '@shared/types';
+import KeyboardIcon from '~icons/ph/keyboard';
+import type {
+  BlankNoteShortcut,
+  NoteMeta,
+  SaveSyncConfigInput,
+  SearchHit,
+  SyncStatus,
+  UpdateState,
+} from '@shared/types';
 import { foldersApi, notesApi, settingsApi, trashApi } from '../api/notes';
 import type { TrashStats } from '../api/notes';
 import { syncApi } from '../api/sync';
 import { apiErrorCode, apiErrorMessage } from '../api/client';
 import { shortenFolder } from '../utils/path';
+import { COLORS, readLastNoteColor } from '../utils/colors';
+import { formatRelativeTime } from '../utils/time';
+import { noteContentToPlainText } from '../utils/plain-text';
 import { highlightTerms, windowAroundMatch } from '../components/search-highlight';
 import {
   applyLanguagePreference,
@@ -67,19 +82,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-/** 相对时间：同步状态的「上次同步」用。Go 零值时间（0001 年）= 从未同步 */
-function formatRelativeTime(t: TFunction, iso?: string): string {
-  if (!iso) return t('time.never');
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime()) || d.getFullYear() <= 1) return t('time.never');
-  const diff = Date.now() - d.getTime();
-  if (diff < 45_000) return t('time.justNow');
-  const min = Math.floor(diff / 60_000);
-  if (min < 60) return t('time.minutesAgo', { count: min });
-  const h = Math.floor(min / 60);
-  if (h < 24) return t('time.hoursAgo', { count: h });
-  return t('time.daysAgo', { count: Math.floor(h / 24) });
-}
+/** 相对时间格式化已迁至 utils/time.ts（便签窗口同步按钮也要用） */
 
 type Stage = 'loading' | 'setup' | 'ready';
 
@@ -128,13 +131,23 @@ export default function MainView() {
   const [trashStats, setTrashStats] = useState<TrashStats | null>(null);
   const [trashRetention, setTrashRetention] = useState(30);
   const [emptyConfirm, setEmptyConfirm] = useState(false);
+  /** 新建按钮的显示色：跟随上次用色（localStorage，六色白名单校验） */
+  const [createColor, setCreateColor] = useState(
+    () => COLORS.find((c) => c.key === readLastNoteColor()) ?? COLORS[0],
+  );
   // git 同步：状态快照 + 编辑表单（token 不回显，留空=不修改）+ 交互态
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncForm, setSyncForm] = useState({ url: '', username: '', token: '', branch: 'main' });
   const [syncEditing, setSyncEditing] = useState(false);
   const [syncDisableConfirm, setSyncDisableConfirm] = useState(false);
+  /** 分叉接管两阶段确认态：命中的策略（local/remote），3 秒未再点自动复位 */
+  const [syncResolveConfirm, setSyncResolveConfirm] = useState<'local' | 'remote' | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncFormError, setSyncFormError] = useState('');
+  /** 与 syncFormError 配套的服务端错误码：SYNC_LOCAL_NOT_PINSLIP_REPO 时显示「仍要接入此仓库」认领入口 */
+  const [syncFormErrorCode, setSyncFormErrorCode] = useState('');
+  /** 本地仓库认领两阶段确认态（参照 syncDisableConfirm 模式） */
+  const [syncAdoptConfirm, setSyncAdoptConfirm] = useState(false);
   /** 「自动同步」间隔输入框（分钟）：受控文本，提交/回退时与服务端生效值对齐；
    *  dirty 标记防止 30s 轮询回填覆盖用户正在输入的内容 */
   const [syncIntervalInput, setSyncIntervalInput] = useState('10');
@@ -146,6 +159,23 @@ export default function MainView() {
   // 速记：落点模式（note 逐条 / daily 聚合到当日便签）+ 剪贴板带入开关（缺省开）
   const [quickMode, setQuickMode] = useState<'note' | 'daily'>('note');
   const [quickClipboard, setQuickClipboard] = useState(true);
+  // 高级定制：折叠区展开态（默认收起）+ 托盘/任务栏图标开关（缺省开）
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [trayIcon, setTrayIcon] = useState(true);
+  const [taskbarIcon, setTaskbarIcon] = useState(true);
+  /** 新便签落点（缺省 cascade 固定级联；beside-manager = 跟随主窗口） */
+  const [notePlacement, setNotePlacement] = useState<'cascade' | 'beside-manager'>('cascade');
+  /** 管理器主题偏好（缺省 light 浅色现状；system = 跟随 OS 深色模式）；
+   *  仅主窗口+设置抽屉，便签/速记不受影响 */
+  const [managerTheme, setManagerTheme] = useState<'light' | 'dark' | 'system'>('light');
+  /** OS 深色模式事实（main 经 nativeTheme 提供）：managerTheme='system' 时合成生效主题 */
+  const [osDark, setOsDark] = useState(false);
+  /** 生效主题：偏好 'system' 时按 OS 深色事实合成，手动档即偏好本身 */
+  const effectiveTheme: 'light' | 'dark' =
+    managerTheme === 'system' ? (osDark ? 'dark' : 'light') : managerTheme;
+  /** 空白便签全局快捷键（缺省 off 不注册）+ 注册失败提示态（新键被他应用占用时回滚选项） */
+  const [blankNoteShortcut, setBlankNoteShortcut] = useState<BlankNoteShortcut>('off');
+  const [blankNoteShortcutError, setBlankNoteShortcutError] = useState(false);
   /** 配置表单 dirty 标记：编辑中不被 30s 轮询回填覆盖；保存/取消/重开抽屉时复位 */
   const syncFormDirtyRef = useRef(false);
   // 三视图：列表（全部平铺）/ 文件夹（分层导航）/ 标签（按标签分组）
@@ -156,6 +186,10 @@ export default function MainView() {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [moveTarget, setMoveTarget] = useState<NoteMeta | null>(null);
+  /** 摘要预览手风琴：当前展开的便签 id（同时只展开一条，会话内瞬态不持久化） */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** 列表项「复制全部」的 ✓ 反馈：最近复制成功的便签 id（1.2s 后复位） */
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   /** 移动弹层的路径筛选 */
   const [moveFilter, setMoveFilter] = useState('');
   // 列表视图排序：按更新/创建时间 × 升/倒序（默认更新倒序，与 API 顺序一致）
@@ -361,6 +395,19 @@ export default function MainView() {
       .catch(() => setStage('setup'));
   }, []);
 
+  // 新建按钮色跟随上次用色：便签窗口换色写 localStorage——storage 事件
+  // 跨窗口同步（同源分区），focus 兜底（同窗口读写不触发 storage）
+  useEffect(() => {
+    const sync = () =>
+      setCreateColor(COLORS.find((c) => c.key === readLastNoteColor()) ?? COLORS[0]);
+    window.addEventListener('storage', sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, []);
+
   // 更新状态：挂载时拉一次快照（可能已有后台检查结果），之后跟随主进程广播
   useEffect(() => {
     window.api
@@ -407,6 +454,31 @@ export default function MainView() {
     setMoveFilter('');
   }, [moveTarget]);
 
+  // 挂载即读高级定制：主题要在首帧就位（无「先浅色一闪再变深」窗口期），
+  // 托盘/任务栏图标、新便签落点与主题同一次 getAdvanced 调用
+  useEffect(() => {
+    window.api
+      .getAdvanced()
+      .then((a) => {
+        setTrayIcon(a.trayIcon);
+        setTaskbarIcon(a.taskbarIcon);
+        setNotePlacement(a.notePlacement);
+        setManagerTheme(a.managerTheme);
+        setBlankNoteShortcut(a.blankNoteShortcut);
+      })
+      .catch(() => {});
+  }, []);
+
+  // OS 深色模式事实：挂载读取一次 + 订阅 main 的 nativeTheme 变更广播
+  // （managerTheme='system' 时即时跟进，无需重启）
+  useEffect(() => {
+    window.api
+      .getOsDark()
+      .then(setOsDark)
+      .catch(() => {});
+    return window.api.onOsThemeChanged(setOsDark);
+  }, []);
+
   // 打开设置抽屉时同步开机自启状态（仅打包环境为真实值）+ 回收区统计与保留天数
   useEffect(() => {
     if (!settingsOpen) return;
@@ -414,6 +486,16 @@ export default function MainView() {
     window.api
       .getAutoStart()
       .then(setAutoStart)
+      .catch(() => {});
+    window.api
+      .getAdvanced()
+      .then((a) => {
+        setTrayIcon(a.trayIcon);
+        setTaskbarIcon(a.taskbarIcon);
+        setNotePlacement(a.notePlacement);
+        setManagerTheme(a.managerTheme);
+        setBlankNoteShortcut(a.blankNoteShortcut);
+      })
       .catch(() => {});
     trashApi
       .stats()
@@ -435,6 +517,7 @@ export default function MainView() {
     if (!settingsOpen) return;
     setSyncEditing(false);
     setSyncDisableConfirm(false);
+    setSyncResolveConfirm(null);
     setSyncFormError('');
     syncFormDirtyRef.current = false;
     const load = () =>
@@ -468,6 +551,13 @@ export default function MainView() {
     const timer = setTimeout(() => setSyncDisableConfirm(false), 3000);
     return () => clearTimeout(timer);
   }, [syncDisableConfirm]);
+
+  // 分叉接管两阶段确认：3 秒内未再点自动复位（同停用套路）
+  useEffect(() => {
+    if (!syncResolveConfirm) return;
+    const timer = setTimeout(() => setSyncResolveConfirm(null), 3000);
+    return () => clearTimeout(timer);
+  }, [syncResolveConfirm]);
 
   // 清空回收区：两阶段确认（第一次点击进入确认态，3 秒内再点执行，超时复位）
   useEffect(() => {
@@ -537,6 +627,56 @@ export default function MainView() {
       .catch(() => setQuickClipboard(!next));
   }, [trashRetention, mcpEnabled, quickMode, quickClipboard]);
 
+  // 托盘图标开关（高级定制）：乐观切换，失败回滚；主进程 set 时立即销毁/重建托盘
+  const toggleTrayIcon = useCallback(() => {
+    const next = !trayIcon;
+    setTrayIcon(next);
+    window.api.setAdvanced({ trayIcon: next }).catch(() => setTrayIcon(!next));
+  }, [trayIcon]);
+
+  // 任务栏图标开关（高级定制）：乐观切换，失败回滚；主进程 set 时对主窗口
+  // setSkipTaskbar 立即生效（仅主窗口，便签任务栏入口不受影响）
+  const toggleTaskbarIcon = useCallback(() => {
+    const next = !taskbarIcon;
+    setTaskbarIcon(next);
+    window.api.setAdvanced({ taskbarIcon: next }).catch(() => setTaskbarIcon(!next));
+  }, [taskbarIcon]);
+
+  // 新便签落点（高级定制）：乐观切换，失败回滚旧值
+  const changeNotePlacement = useCallback(
+    (next: 'cascade' | 'beside-manager') => {
+      const prev = notePlacement;
+      setNotePlacement(next);
+      window.api.setAdvanced({ notePlacement: next }).catch(() => setNotePlacement(prev));
+    },
+    [notePlacement],
+  );
+
+  // 管理器主题（高级定制）：乐观切换即改 data-theme，失败回滚旧值
+  const changeManagerTheme = useCallback(
+    (next: 'light' | 'dark' | 'system') => {
+      const prev = managerTheme;
+      setManagerTheme(next);
+      window.api.setAdvanced({ managerTheme: next }).catch(() => setManagerTheme(prev));
+    },
+    [managerTheme],
+  );
+
+  // 空白便签快捷键（高级定制）：乐观切换；注册失败（新键被他应用占用）时
+  // main 抛错——回滚选项并提示（设置未持久化、旧绑定保持有效）
+  const changeBlankNoteShortcut = useCallback(
+    (next: BlankNoteShortcut) => {
+      const prev = blankNoteShortcut;
+      setBlankNoteShortcut(next);
+      setBlankNoteShortcutError(false);
+      window.api.setAdvanced({ blankNoteShortcut: next }).catch(() => {
+        setBlankNoteShortcut(prev);
+        setBlankNoteShortcutError(true);
+      });
+    },
+    [blankNoteShortcut],
+  );
+
   // 界面语言切换：乐观更新，立即生效（i18n.changeLanguage）并持久化到主进程设置
   const changeLanguage = useCallback((pref: LanguagePreference) => {
     setLangPref(pref);
@@ -564,6 +704,8 @@ export default function MainView() {
     if (!url || syncBusy) return;
     setSyncBusy(true);
     setSyncFormError('');
+    setSyncFormErrorCode('');
+    setSyncAdoptConfirm(false);
     syncApi
       .saveConfig({
         url,
@@ -578,9 +720,69 @@ export default function MainView() {
         syncFormDirtyRef.current = false;
         setSyncForm((f) => ({ ...f, token: '' })); // token 不留内存态
       })
-      .catch((err) => setSyncFormError(translateServerError(t, apiErrorCode(err), apiErrorMessage(err))))
+      .catch((err) => {
+        setSyncFormError(translateServerError(t, apiErrorCode(err), apiErrorMessage(err)));
+        setSyncFormErrorCode(apiErrorCode(err) ?? '');
+      })
       .finally(() => setSyncBusy(false));
   }, [syncForm, syncBusy, t]);
+
+  // 本地仓库认领：守卫报 SYNC_LOCAL_NOT_PINSLIP_REPO（vault 已是 git 仓库但缺
+  // .pinslip-repo 标记）且用户两阶段确认后，重发配置带 adopt:true——服务端创建
+  // 标记并提交（现有未提交变更一并入库，提示文案已声明）。编辑态用表单值；
+  // 状态态（错误来自状态轮询）用服务端生效值 + 空 token（不修改已存凭证）
+  const adoptLocalRepo = useCallback(() => {
+    if (syncBusy) return;
+    if (!syncAdoptConfirm) {
+      setSyncAdoptConfirm(true);
+      return;
+    }
+    setSyncAdoptConfirm(false);
+    setSyncBusy(true);
+    setSyncFormError('');
+    setSyncFormErrorCode('');
+    const input: SaveSyncConfigInput = syncEditing
+      ? {
+          url: syncForm.url.trim(),
+          username: syncForm.username.trim(),
+          token: syncForm.token,
+          branch: syncForm.branch.trim() || 'main',
+          enabled: true,
+          adopt: true,
+        }
+      : {
+          url: syncStatus?.url ?? syncForm.url.trim(),
+          username: syncStatus?.username ?? syncForm.username.trim(),
+          token: '', // 空串 = 不修改已存 token
+          branch: syncStatus?.branch || syncForm.branch.trim() || 'main',
+          enabled: true,
+          adopt: true,
+        };
+    syncApi
+      .saveConfig(input)
+      .then((st) => {
+        setSyncStatus(st);
+        setSyncEditing(false);
+        syncFormDirtyRef.current = false;
+        setSyncForm((f) => ({ ...f, token: '' }));
+      })
+      .catch((err) => {
+        if (syncEditing) {
+          setSyncFormError(translateServerError(t, apiErrorCode(err), apiErrorMessage(err)));
+          setSyncFormErrorCode(apiErrorCode(err) ?? '');
+        }
+      })
+      .finally(() => {
+        setSyncBusy(false);
+        // 状态态失败时错误体现在 lastError：拉一次状态立即对齐（不必等 30s 轮询）
+        if (!syncEditing) {
+          syncApi
+            .getStatus()
+            .then(setSyncStatus)
+            .catch(() => {});
+        }
+      });
+  }, [syncBusy, syncAdoptConfirm, syncEditing, syncForm, syncStatus, t]);
 
   // 立即同步一轮（syncNow 不抛错，结果全在返回状态里）
   const doSyncNow = useCallback(() => {
@@ -645,6 +847,31 @@ export default function MainView() {
       .finally(() => setSyncBusy(false));
   }, [syncDisableConfirm]);
 
+  // 分叉接管：两阶段确认（确认文案写明各自代价）。执行失败不抛错——
+  // 错误体现在返回状态的 lastError；前置校验被拒（400）时拉一次状态对齐
+  const resolveDivergence = useCallback(
+    (strategy: 'local' | 'remote') => {
+      if (syncBusy) return;
+      if (syncResolveConfirm !== strategy) {
+        setSyncResolveConfirm(strategy);
+        return;
+      }
+      setSyncResolveConfirm(null);
+      setSyncBusy(true);
+      syncApi
+        .resolve(strategy)
+        .then(setSyncStatus)
+        .catch(() =>
+          syncApi
+            .getStatus()
+            .then(setSyncStatus)
+            .catch(() => {}),
+        )
+        .finally(() => setSyncBusy(false));
+    },
+    [syncBusy, syncResolveConfirm],
+  );
+
   // 选择/更换保险库：主进程弹目录选择框，成功后重启服务，刷新本窗口
   const chooseVault = useCallback(() => {
     window.api
@@ -657,6 +884,19 @@ export default function MainView() {
 
   const openNote = (id: string) => window.api.createNote(id);
   const createNote = () => window.api.createNote();
+
+  /** 列表项「复制全部」：拉全文 → 清 <br/> 空行标记（拷 markdown 源文，
+   *  不做语法剥离）→ 写剪贴板；✓ 反馈 1.2s */
+  const copyAllNote = useCallback((note: NoteMeta) => {
+    notesApi
+      .get(note.id)
+      .then((full) => navigator.clipboard.writeText(noteContentToPlainText(full.content)))
+      .then(() => {
+        setCopiedId(note.id);
+        setTimeout(() => setCopiedId((cur) => (cur === note.id ? null : cur)), 1200);
+      })
+      .catch(() => {});
+  }, []);
 
   const removeNote = (id: string) => {
     notesApi
@@ -679,15 +919,49 @@ export default function MainView() {
     </>
   );
 
-  // 便签列表项（三视图共用）：颜色卡 + 标题/时间/标签 + 打开目录/移动/删除按钮。
+  // 便签列表项（三视图共用）：颜色卡 + 标题/摘要预览/时间/标签 + 打开/打开目录/移动/删除按钮。
+  // 交互反转（add-list-note-preview）：单击切换摘要 3 行 ↔ 10 行（手风琴），
+  // 打开便签走双击 / 中键 / 右侧「打开」按钮；无摘要（空白便签）时单击回退打开。
   // showFolder：列表视图平铺全部便签，需要标注所在文件夹。
   const renderNoteItem = (note: NoteMeta, showFolder = false) => (
-    <li key={note.id} data-color={note.color || 'yellow'} onClick={() => openNote(note.id)}>
+    <li
+      key={note.id}
+      className="note-list__note"
+      data-color={note.color || 'yellow'}
+      onClick={(e) => {
+        // e.detail > 1 是双击的第二次 click，交给 onDoubleClick 处理
+        if (e.detail > 1) return;
+        // 拖选文本后也算一次 click——用户只是想选中，不触发展开
+        if (window.getSelection()?.toString()) return;
+        if (!note.excerpt) {
+          openNote(note.id);
+          return;
+        }
+        setExpandedId((cur) => (cur === note.id ? null : note.id));
+      }}
+      onDoubleClick={() => openNote(note.id)}
+      onAuxClick={(e) => {
+        // 中键打开；点在按钮上让按钮自己处理（保持既有按钮行为不受中键影响）
+        if (e.button !== 1 || (e.target as HTMLElement).closest('button')) return;
+        e.preventDefault();
+        openNote(note.id);
+      }}
+    >
       <span className="note-list__title">
         {note.inbox && <TrayIcon className="note-list__inbox" />}
         {note.pin && <PinIcon className="note-list__pin" />}
-        {note.title}
+        {/* 文本独立 span：flex 容器的 text-overflow 对匿名文本不可靠，
+            省略号要落在自己的 min-width:0 盒子里；hover 用原生 title 展示全名 */}
+        <span className="note-list__title-text" title={note.title}>
+          {note.title}
+        </span>
       </span>
+      {/* 摘要预览：折叠 line-clamp 3 行，展开 10 行（内容不足按实际显示）；空白便签不渲染 */}
+      {note.excerpt && (
+        <span className={`note-list__preview${expandedId === note.id ? ' is-expanded' : ''}`}>
+          {note.excerpt}
+        </span>
+      )}
       <span className="note-list__meta">
         {formatTime(note.updatedAt)} · {t('note.words', { count: note.wordCount })}
         {showFolder && note.folder && !note.inbox && (
@@ -717,6 +991,26 @@ export default function MainView() {
           )}
         </span>
       ) : null}
+      <button
+        className="note-list__copy-all"
+        title={copiedId === note.id ? t('note.copied') : t('note.copyAll')}
+        onClick={(e) => {
+          e.stopPropagation();
+          copyAllNote(note);
+        }}
+      >
+        {copiedId === note.id ? <CheckIcon /> : <CopyIcon />}
+      </button>
+      <button
+        className="note-list__open-note"
+        title={t('note.openNote')}
+        onClick={(e) => {
+          e.stopPropagation();
+          openNote(note.id);
+        }}
+      >
+        <ArrowSquareOutIcon />
+      </button>
       {!note.inbox && (
         <button
           className="note-list__open"
@@ -753,13 +1047,13 @@ export default function MainView() {
   );
 
   if (stage === 'loading') {
-    return <div className="main-view vault-setup" />;
+    return <div className="main-view vault-setup" data-theme={effectiveTheme} />;
   }
 
   // 首次使用：选择保险库
   if (stage === 'setup') {
     return (
-      <div className="main-view vault-setup">
+      <div className="main-view vault-setup" data-theme={effectiveTheme}>
         <h1 className="vault-setup__title">PinSlip</h1>
         <FolderIcon className="vault-setup__icon" />
         <p className="vault-setup__text">{t('setup.text')}</p>
@@ -772,11 +1066,17 @@ export default function MainView() {
   }
 
   return (
-    <div className="main-view">
+    <div className="main-view" data-theme={effectiveTheme}>
       <header className="main-view__header">
         <h1>PinSlip</h1>
         <div className="main-view__actions">
-          <button className="main-view__create" onClick={createNote}>
+          {/* 底色跟随上次用色（storage 事件/focus 同步），文字保持固定深棕
+              （#5d4037 在六个浅色底上都清晰，绑色板 ink 会同色系低对比） */}
+          <button
+            className="main-view__create"
+            style={{ background: createColor.dot }}
+            onClick={createNote}
+          >
             <PlusIcon /> {t('header.create')}
           </button>
           <button
@@ -1065,6 +1365,21 @@ export default function MainView() {
                     />
                   </div>
                   {syncFormError && <div className="settings-panel__error">{syncFormError}</div>}
+                  {/* 本地认领入口：仅守卫错误（缺 .pinslip-repo 标记）时出现 */}
+                  {syncFormErrorCode === 'SYNC_LOCAL_NOT_PINSLIP_REPO' && (
+                    <>
+                      <div className="settings-panel__hint">{t('sync.adoptHint')}</div>
+                      <div className="settings-panel__actions">
+                        <button
+                          className={`settings-panel__btn${syncAdoptConfirm ? ' is-danger' : ''}`}
+                          disabled={syncBusy}
+                          onClick={adoptLocalRepo}
+                        >
+                          {syncAdoptConfirm ? t('sync.adoptConfirm') : t('sync.adopt')}
+                        </button>
+                      </div>
+                    </>
+                  )}
                   <div className="settings-panel__actions">
                     {syncStatus?.configured && (
                       <button
@@ -1072,6 +1387,8 @@ export default function MainView() {
                         onClick={() => {
                           setSyncEditing(false);
                           setSyncFormError('');
+                          setSyncFormErrorCode('');
+                          setSyncAdoptConfirm(false);
                           // 放弃草稿：复位 dirty 并立刻回填服务端生效值
                           syncFormDirtyRef.current = false;
                           if (syncStatus?.configured) {
@@ -1162,10 +1479,63 @@ export default function MainView() {
                       </span>
                     </div>
                   )}
-                  {syncStatus.lastError && (
-                    <div className="settings-panel__error">
-                      {translateServerError(t, syncStatus.lastErrorCode, syncStatus.lastError)}
-                    </div>
+                  {/* 分叉接管面板：远端有 .pinslip-repo 标记才把单行错误升级为面板
+                      （参考信息 + 两个两阶段确认按钮）；来历不明远端维持原单行错误 */}
+                  {syncStatus.lastError &&
+                    (syncStatus.lastErrorCode === 'SYNC_UNRELATED_HISTORIES' &&
+                    syncStatus.remoteIsPinslip ? (
+                      <>
+                        <div className="settings-panel__error">
+                          {translateServerError(t, syncStatus.lastErrorCode, syncStatus.lastError)}
+                        </div>
+                        <div className="settings-panel__hint">
+                          {t('sync.divergenceInfo', {
+                            time: formatRelativeTime(t, syncStatus.remoteLastCommitAt),
+                            local: syncStatus.localNotes ?? 0,
+                            remote: syncStatus.remoteNotes ?? 0,
+                          })}
+                        </div>
+                        <div className="settings-panel__actions">
+                          <button
+                            className={`settings-panel__btn${syncResolveConfirm === 'local' ? ' is-danger' : ''}`}
+                            disabled={syncBusy}
+                            onClick={() => resolveDivergence('local')}
+                          >
+                            {syncResolveConfirm === 'local'
+                              ? t('sync.divergenceLocalConfirm')
+                              : t('sync.divergenceLocal')}
+                          </button>
+                          <button
+                            className={`settings-panel__btn${syncResolveConfirm === 'remote' ? ' is-danger' : ''}`}
+                            disabled={syncBusy}
+                            onClick={() => resolveDivergence('remote')}
+                          >
+                            {syncResolveConfirm === 'remote'
+                              ? t('sync.divergenceRemoteConfirm')
+                              : t('sync.divergenceRemote')}
+                          </button>
+                        </div>
+                        <div className="settings-panel__hint">{t('sync.divergenceHint')}</div>
+                      </>
+                    ) : (
+                      <div className="settings-panel__error">
+                        {translateServerError(t, syncStatus.lastErrorCode, syncStatus.lastError)}
+                      </div>
+                    ))}
+                  {/* 本地认领入口：状态轮询暴露的守卫错误（缺 .pinslip-repo 标记）同样可认领 */}
+                  {syncStatus.lastErrorCode === 'SYNC_LOCAL_NOT_PINSLIP_REPO' && (
+                    <>
+                      <div className="settings-panel__hint">{t('sync.adoptHint')}</div>
+                      <div className="settings-panel__actions">
+                        <button
+                          className={`settings-panel__btn${syncAdoptConfirm ? ' is-danger' : ''}`}
+                          disabled={syncBusy}
+                          onClick={adoptLocalRepo}
+                        >
+                          {syncAdoptConfirm ? t('sync.adoptConfirm') : t('sync.adopt')}
+                        </button>
+                      </div>
+                    </>
                   )}
                   <div className="settings-panel__actions">
                     {syncStatus.enabled ? (
@@ -1282,6 +1652,108 @@ export default function MainView() {
               )}
               <div className="settings-panel__hint">{t('mcp.hint')}</div>
             </div>
+
+            {/* 高级定制：抽屉底部可折叠二级区域（默认收起，视觉降级），
+                承载行为定制选项；全部选项缺省保持现状，即改即存即生效 */}
+            <button
+              className="settings-panel__section settings-panel__section--toggle"
+              title={advancedOpen ? t('settings.advancedCollapse') : t('settings.advancedExpand')}
+              onClick={() => setAdvancedOpen((v) => !v)}
+            >
+              {advancedOpen ? <CaretDownIcon /> : <CaretRightIcon />}
+              {t('settings.advanced')}
+            </button>
+            {advancedOpen && (
+              <div className="settings-card">
+                <div className="settings-panel__row">
+                  <TrayIcon className="settings-panel__row-icon" />
+                  <span className="settings-panel__label">{t('settings.trayIcon')}</span>
+                  <button
+                    className="settings-toggle"
+                    role="switch"
+                    aria-checked={trayIcon}
+                    data-on={trayIcon}
+                    title={t('settings.trayIconTip')}
+                    onClick={toggleTrayIcon}
+                  >
+                    <span className="settings-toggle__thumb" />
+                  </button>
+                </div>
+                <div className="settings-panel__hint">{t('settings.trayIconHint')}</div>
+                <div className="settings-panel__row">
+                  <AppWindowIcon className="settings-panel__row-icon" />
+                  <span className="settings-panel__label">{t('settings.taskbarIcon')}</span>
+                  <button
+                    className="settings-toggle"
+                    role="switch"
+                    aria-checked={taskbarIcon}
+                    data-on={taskbarIcon}
+                    title={t('settings.taskbarIconTip')}
+                    onClick={toggleTaskbarIcon}
+                  >
+                    <span className="settings-toggle__thumb" />
+                  </button>
+                </div>
+                <div className="settings-panel__hint">{t('settings.taskbarIconHint')}</div>
+                <div className="settings-panel__row">
+                  <NoteIcon className="settings-panel__row-icon" />
+                  <span className="settings-panel__label">{t('settings.notePlacement')}</span>
+                  <select
+                    className="settings-panel__select"
+                    value={notePlacement}
+                    onChange={(e) =>
+                      changeNotePlacement(e.target.value as 'cascade' | 'beside-manager')
+                    }
+                  >
+                    <option value="cascade">{t('settings.notePlacementCascade')}</option>
+                    <option value="beside-manager">
+                      {t('settings.notePlacementBesideManager')}
+                    </option>
+                  </select>
+                </div>
+                <div className="settings-panel__hint">{t('settings.notePlacementHint')}</div>
+                <div className="settings-panel__row">
+                  <MoonIcon className="settings-panel__row-icon" />
+                  <span className="settings-panel__label">{t('settings.managerTheme')}</span>
+                  <select
+                    className="settings-panel__select"
+                    value={managerTheme}
+                    onChange={(e) =>
+                      changeManagerTheme(e.target.value as 'light' | 'dark' | 'system')
+                    }
+                  >
+                    <option value="light">{t('settings.managerThemeLight')}</option>
+                    <option value="dark">{t('settings.managerThemeDark')}</option>
+                    <option value="system">{t('settings.managerThemeSystem')}</option>
+                  </select>
+                </div>
+                <div className="settings-panel__hint">{t('settings.managerThemeHint')}</div>
+                <div className="settings-panel__row">
+                  <KeyboardIcon className="settings-panel__row-icon" />
+                  <span className="settings-panel__label">{t('settings.blankNoteShortcut')}</span>
+                  <select
+                    className="settings-panel__select"
+                    value={blankNoteShortcut}
+                    onChange={(e) => changeBlankNoteShortcut(e.target.value as BlankNoteShortcut)}
+                  >
+                    <option value="off">{t('settings.blankNoteShortcutOff')}</option>
+                    <option value="ctrl+alt+n">{t('settings.blankNoteShortcutCtrlAltN')}</option>
+                    <option value="ctrl+shift+alt+n">
+                      {t('settings.blankNoteShortcutCtrlShiftAltN')}
+                    </option>
+                    <option value="ctrl+alt+insert">
+                      {t('settings.blankNoteShortcutCtrlAltInsert')}
+                    </option>
+                  </select>
+                </div>
+                <div className="settings-panel__hint">{t('settings.blankNoteShortcutHint')}</div>
+                {blankNoteShortcutError && (
+                  <div className="settings-panel__error">
+                    {t('settings.blankNoteShortcutRegisterFailed')}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

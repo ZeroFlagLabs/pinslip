@@ -6,6 +6,7 @@ import PlusIcon from '~icons/ph/plus';
 import XIcon from '~icons/ph/x';
 import CaretUpIcon from '~icons/ph/caret-up';
 import CaretDownIcon from '~icons/ph/caret-down';
+import CaretDownFillIcon from '~icons/ph/caret-down-fill';
 import SubtractFillIcon from '~icons/ph/subtract-fill';
 import DotsThreeIcon from '~icons/ph/dots-three';
 import DotsSixVerticalIcon from '~icons/ph/dots-six-vertical';
@@ -25,18 +26,24 @@ import MagnifyingGlassPlusIcon from '~icons/ph/magnifying-glass-plus';
 import CopyIcon from '~icons/ph/copy';
 import CheckIcon from '~icons/ph/check';
 import ArrowsClockwiseIcon from '~icons/ph/arrows-clockwise';
+import WarningCircleFillIcon from '~icons/ph/warning-circle-fill';
+import PencilSimpleIcon from '~icons/ph/pencil-simple';
+import ArrowCounterClockwiseIcon from '~icons/ph/arrow-counter-clockwise';
 import PinIcon from '../components/icons/PinIcon';
 import Editor from '../components/editor/Editor';
 import type { EditorHandle } from '../components/editor/Editor';
 import ConflictResolver from '../components/ConflictResolver';
 import { toMarkdownImageSrc } from '../components/editor/image-support';
-import { attachmentsApi } from '../api/attachments';
+import { attachmentsApi, SUPPORTED_IMAGE_MIME_TYPES } from '../api/attachments';
 import { foldersApi, notesApi } from '../api/notes';
 import { syncApi } from '../api/sync';
 import { hasConflictMarkers } from '../utils/conflict';
+import { COLORS, LAST_NOTE_COLOR_KEY, readLastNoteColor } from '../utils/colors';
+import { formatRelativeTime } from '../utils/time';
+import { noteContentToPlainText } from '../utils/plain-text';
 import { shortenFolder } from '../utils/path';
 import { COLLAPSE_ANIM_MS } from '@shared/anim';
-import type { GroupState, NoteColor } from '@shared/types';
+import type { GroupState, NoteColor, SyncStatus } from '@shared/types';
 
 type SaveState = 'loading' | 'idle' | 'saving' | 'saved' | 'error';
 
@@ -93,17 +100,7 @@ const ZOOM_MAX = 200;
 const ZOOM_STEP = 10;
 const ZOOM_DEFAULT = 100;
 
-/** 六色定义：dot = 标题栏色；ink = 同色加深版（颜色按钮图标着色，
- *  直接用标题栏本色会在同色标题栏上隐身，故用 600 档深色）。
- *  显示名在语言包 color.<key>，渲染时 t() 取 */
-const COLORS: { key: Exclude<NoteColor, ''>; dot: string; ink: string }[] = [
-  { key: 'yellow', dot: '#ffe97a', ink: '#f9a825' },
-  { key: 'pink', dot: '#f48fb1', ink: '#d81b60' },
-  { key: 'green', dot: '#a5d6a7', ink: '#43a047' },
-  { key: 'blue', dot: '#90caf9', ink: '#1e88e5' },
-  { key: 'purple', dot: '#ce93d8', ink: '#8e24aa' },
-  { key: 'orange', dot: '#ffcc80', ink: '#fb8c00' },
-];
+/** 六色定义已迁至 utils/colors.ts（主窗口新建按钮也要读色板与上次用色） */
 
 /** 便签窗口视图：无边框窗内的编辑界面；
  *  标题栏承载 新建/颜色/置顶/关闭，底部工具栏（focus 浮现）承载 ⋯菜单/保存状态 */
@@ -119,7 +116,9 @@ export default function NoteView() {
   const [collapsed, setCollapsed] = useState(false); // 折叠成标题条（只显示标题栏）
   /** 折叠/展开的 CSS 高度过渡只在切换瞬间挂（180ms），平时拖拽改尺寸不挂 transition 防滞后 */
   const [collapseAnim, setCollapseAnim] = useState(false);
-  const [color, setColor] = useState<NoteColor>('yellow');
+  const [color, setColor] = useState<NoteColor>(() => readLastNoteColor());
+  /** 当前新建用色（localStorage 上次用色）：与本便签同色时新建按钮不显示圆点 */
+  const [newNoteColor, setNewNoteColor] = useState<NoteColor>(() => readLastNoteColor());
   /** 内容缩放（整数百分比）；只作用于标题文字与编辑器正文，标题栏/工具栏按钮不缩 */
   const [zoomPct, setZoomPct] = useState(ZOOM_DEFAULT);
   const [tags, setTags] = useState<string[]>([]);
@@ -132,6 +131,9 @@ export default function NoteView() {
   /** 文件夹面板的路径筛选（目录 >5 个时出现输入框） */
   const [folderFilter, setFolderFilter] = useState('');
   const [saveState, setSaveState] = useState<SaveState>('loading');
+  /** git 同步状态快照：仅配置了同步时有意义；激活时 + 手动同步后拉取（不轮询） */
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
   /** 外部修改横幅：本地脏期间磁盘被改 → 暂存磁盘内容，等用户选择（后到的覆盖旧的） */
   const [externalUpdate, setExternalUpdate] = useState<string | null>(null);
   /** Editor remount 世代号：外部重载时 +1，以磁盘内容为 defaultValue 重建编辑器 */
@@ -157,11 +159,20 @@ export default function NoteView() {
   const [groupHover, setGroupHover] = useState(false);
   /** 组手柄拖拽中（整组移动）：驱动手柄 is-dragging 态（cursor: grabbing） */
   const [groupDragging, setGroupDragging] = useState(false);
+  /** 文件管理器拖入受支持图片时的卡片级投放反馈。 */
+  const [imageDragActive, setImageDragActive] = useState(false);
   /** 组名编辑中（组标签手柄双击进入）；Esc 置取消标记，blur 提交 */
   const [groupRenaming, setGroupRenaming] = useState(false);
   /** 组手柄右键菜单（解散此组） */
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupRenameCancelRef = useRef(false);
+  /** 手动标题标志：true = 标题由用户重命名，标题栏取 note.title 不随正文实时推导 */
+  const [titleManual, setTitleManual] = useState(false);
+  /** 标题行内编辑中（双击标题或右键「重命名便签」进入）；Esc 置取消标记，blur 提交 */
+  const [titleRenaming, setTitleRenaming] = useState(false);
+  /** 标题栏右键菜单（重命名便签 / 恢复自动标题） */
+  const [titleMenuOpen, setTitleMenuOpen] = useState(false);
+  const titleRenameCancelRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +183,8 @@ export default function NoteView() {
   const folderRef = useRef(''); // 笔记所在子文件夹（图片 ../ 前缀深度）
   const contentRef = useRef(''); // 内容现值：供异步回调（保存回包/外部变更）读取，避开闭包旧值
   const dirtyRef = useRef(false); // 有未落盘的本地编辑（用户输入置位，保存成功/外部重载复位）
+  /** 最后一次用户编辑的时间戳：同步按钮判定「本地与 git 最后一次同步是否一致」用 */
+  const lastEditAtRef = useRef(0);
 
   /** 窗口激活时若焦点没落在具体控件上，把焦点交给编辑器（光标置文末，直接可输入）。
    *  编辑器异步初始化，未就绪时短间隔重试几次 */
@@ -227,11 +240,35 @@ export default function NoteView() {
     if (!folderPanelOpen) setFolderFilter('');
   }, [folderPanelOpen]);
 
+  /** git 同步状态：挂载/激活/同步完成后拉取（便签可多开，轮询不可接受） */
+  const refreshSyncStatus = useCallback(() => {
+    syncApi
+      .getStatus()
+      .then(setSyncStatus)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => refreshSyncStatus(), [refreshSyncStatus]);
+
+  /** 同步按钮点击：立即一轮 commit+pull+push；失败不抛错，错误在返回状态的
+   *  lastError 字段（按钮转红色调 + tooltip 展示） */
+  const doSyncNow = useCallback(() => {
+    if (syncing) return;
+    setSyncing(true);
+    syncApi
+      .syncNow()
+      .then(setSyncStatus)
+      .catch(() => {})
+      .finally(() => setSyncing(false));
+  }, [syncing]);
+
   // 窗口焦点跟踪：激活时显示工具栏/加深阴影并尝试聚焦编辑器；失焦时收起色板与菜单
   useEffect(() => {
     const onFocus = () => {
       setActive(true);
       focusEditorIfIdle();
+      refreshSyncStatus(); // 用户看它时才拉同步状态
+      setNewNoteColor(readLastNoteColor()); // 其他窗口可能换过新建用色
     };
     const onBlur = () => {
       setActive(false);
@@ -240,6 +277,8 @@ export default function NoteView() {
       setNewMenuOpen(false);
       setTagPanelOpen(false);
       setFolderPanelOpen(false);
+      setGroupMenuOpen(false);
+      setTitleMenuOpen(false);
       setConfirmDelete(false);
     };
     window.addEventListener('focus', onFocus);
@@ -248,19 +287,20 @@ export default function NoteView() {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
     };
-  }, [focusEditorIfIdle]);
+  }, [focusEditorIfIdle, refreshSyncStatus]);
 
   /** 应用外部（磁盘）内容：同步三个 ref 使自动保存 effect 短路（不回写、无回环），
    *  setContent 驱动 UI，editorEpoch+1 触发 Editor key-remount 以磁盘内容重建——
    *  remount 走 defaultValue 初始化，不触发 listener 回声，也不会多写一次盘。
    *  代价是撤销历史清空（外部更新极少发生，可接受）；不主动 refocus，避免抢滚动 */
   const applyExternal = useCallback(
-    (disk: string, diskTitle: string, withToast: boolean) => {
+    (disk: string, diskTitle: string, diskManual: boolean, withToast: boolean) => {
       contentRef.current = disk;
       lastSavedRef.current = disk;
       dirtyRef.current = false;
       setContent(disk);
       setTitle(diskTitle); // 兜底标题顺手刷新（显示标题仍由 deriveTitle 实时推导）
+      setTitleManual(diskManual); // 手动标题标志同样以磁盘为准（外部改 .md 后自愈）
       setExternalUpdate(null);
       setEditorEpoch((n) => n + 1);
       if (withToast) setToast(t('note.toastSynced'));
@@ -284,6 +324,7 @@ export default function NoteView() {
           dirtyRef.current = false;
           setExternalUpdate(null);
           setTitle(note.title);
+          setTitleManual(note.titleManual ?? false);
           setContent(note.content);
           setEditorEpoch((n) => n + 1);
           setSaveState('saved');
@@ -322,7 +363,7 @@ export default function NoteView() {
           // disk === contentRef：自己保存的广播先于回包到达（磁盘即编辑器现值），同样无操作
           if (disk === lastSavedRef.current || disk === contentRef.current) return;
           if (dirtyRef.current) setExternalUpdate(disk);
-          else applyExternal(disk, note.title, true);
+          else applyExternal(disk, note.title, note.titleManual ?? false, true);
         })
         .catch((err: unknown) => {
           if (err instanceof Error && err.message.startsWith('API 404')) {
@@ -361,6 +402,7 @@ export default function NoteView() {
         lastSavedRef.current = note.content;
         contentRef.current = note.content;
         setTitle(note.title);
+        setTitleManual(note.titleManual ?? false);
         setContent(note.content);
         setPinned(note.pin);
         setCollapsed(note.collapsed ?? false);
@@ -379,6 +421,7 @@ export default function NoteView() {
       })
       .catch(() => {
         setTitle('');
+        setTitleManual(false);
         contentRef.current = '';
         setContent('');
         // 新建便签：落盘文件夹来自窗口路由 query（主界面文件夹视图/便签＋菜单传入）；
@@ -394,10 +437,11 @@ export default function NoteView() {
       });
   }, [noteId, focusEditorIfIdle, initialFolder]);
 
-  /** 显示用标题：实时跟随内容首行（与服务端同算法），兜底已保存标题，再兜底「新便签」 */
+  /** 显示用标题：手动标题取已保存值（不随正文变动）；否则实时跟随内容首行
+   *  （与服务端同算法），兜底已保存标题，再兜底「新便签」 */
   const displayTitle = useMemo(
-    () => deriveTitle(content) || title || t('note.newTitle'),
-    [content, title, t],
+    () => (titleManual ? title : deriveTitle(content) || title) || t('note.newTitle'),
+    [content, title, titleManual, t],
   );
 
   /** 冲突标记实时检测：随 content 派生，编辑删掉标记即消失（涵盖初始载入/外部重载/保存后）。
@@ -431,6 +475,7 @@ export default function NoteView() {
           if (contentRef.current === note.content) dirtyRef.current = false;
           setExternalUpdate(null);
           setTitle(note.title);
+          setTitleManual(note.titleManual ?? false);
           setSaveState('saved');
           window.api.notifyNotesChanged(); // 广播：主界面列表近实时刷新
         })
@@ -495,6 +540,7 @@ export default function NoteView() {
   const handleChange = useCallback((markdown: string) => {
     contentRef.current = markdown;
     dirtyRef.current = true;
+    lastEditAtRef.current = Date.now();
     setContent(markdown);
   }, []);
 
@@ -507,18 +553,96 @@ export default function NoteView() {
       .upload(file)
       .then((res) => {
         if (!res) return; // MIME 不在白名单（理论不会，accept 已限定 image/*）
-        editorRef.current?.insertImage(toMarkdownImageSrc(res.path, folderRef.current));
+        editorRef.current?.insertImages([
+          { src: toMarkdownImageSrc(res.path, folderRef.current), alt: file.name },
+        ]);
       })
       .catch(() => {});
   }, []);
 
+  const hasFilePayload = useCallback(
+    (transfer: DataTransfer) =>
+      transfer.files.length > 0 ||
+      Array.from(transfer.items).some((item) => item.kind === 'file') ||
+      Array.from(transfer.types).includes('Files'),
+    [],
+  );
+
+  const supportedDropFiles = useCallback(
+    (transfer: DataTransfer) =>
+      Array.from(transfer.files).filter((file) => SUPPORTED_IMAGE_MIME_TYPES.has(file.type)),
+    [],
+  );
+
+  const hasSupportedDropItem = useCallback(
+    (transfer: DataTransfer) =>
+      Array.from(transfer.items).some(
+        (item) => item.kind === 'file' && SUPPORTED_IMAGE_MIME_TYPES.has(item.type),
+      ) || supportedDropFiles(transfer).length > 0,
+    [supportedDropFiles],
+  );
+
+  const handleImageDragEnter = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (collapsed || hasConflict || !hasFilePayload(e.dataTransfer)) return;
+      e.preventDefault();
+      if (hasSupportedDropItem(e.dataTransfer)) setImageDragActive(true);
+    },
+    [collapsed, hasConflict, hasFilePayload, hasSupportedDropItem],
+  );
+
+  const handleImageDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (collapsed || hasConflict || !hasFilePayload(e.dataTransfer)) return;
+      // 始终吞掉文件投放:不支持的文件不能让 Chromium 把页面导航走或把
+      // 本地路径注入 contenteditable;只有受支持的图片显示 copy 投放反馈
+      e.preventDefault();
+      const supported = hasSupportedDropItem(e.dataTransfer);
+      e.dataTransfer.dropEffect = supported ? 'copy' : 'none';
+      setImageDragActive(supported);
+    },
+    [collapsed, hasConflict, hasFilePayload, hasSupportedDropItem],
+  );
+
+  const handleImageDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+    setImageDragActive(false);
+  }, []);
+
+  const handleImageDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!hasFilePayload(e.dataTransfer)) return;
+      e.preventDefault();
+      setImageDragActive(false);
+      if (collapsed || hasConflict) return;
+      const files = supportedDropFiles(e.dataTransfer);
+      if (files.length === 0) return;
+      const at = { left: e.clientX, top: e.clientY };
+      void Promise.all(
+        files.map(async (file) => {
+          const uploaded = await attachmentsApi.upload(file).catch(() => null);
+          return uploaded
+            ? {
+                src: toMarkdownImageSrc(uploaded.path, folderRef.current),
+                alt: file.name,
+              }
+            : null;
+        }),
+      ).then((images) => {
+        editorRef.current?.insertImages(
+          images.filter((image): image is { src: string; alt: string } => image !== null),
+          at,
+        );
+      });
+    },
+    [collapsed, hasConflict, hasFilePayload, supportedDropFiles],
+  );
+
   /** 复制全部正文到剪贴板；成功后图标短暂变 ✓ 反馈。
-   *  过滤 Milkdown 写入的空行标记 <br />：独立成行 → 空行；行内 → 换行，
-   *  避免粘贴到别处时出现字面 br 标签 */
+   *  优先取编辑器文档纯文本（与 Ctrl+C 序列化一致：块间单换行）；
+   *  编辑器未就绪时回退清理后的 markdown（与主界面列表项同一口径） */
   const copyAll = useCallback(() => {
-    const cleaned = content
-      .replace(/^[ \t]*<br\s*\/?>[ \t]*$/gim, '')
-      .replace(/<br\s*\/?>/gi, '\n');
+    const cleaned = editorRef.current?.getPlainText() ?? noteContentToPlainText(content);
     void navigator.clipboard
       .writeText(cleaned)
       .then(() => {
@@ -568,6 +692,8 @@ export default function NoteView() {
   const changeColor = useCallback(
     (next: NoteColor) => {
       setColor(next);
+      localStorage.setItem(LAST_NOTE_COLOR_KEY, next);
+      setNewNoteColor(next); // 换色即成为新建用色（圆点与本便签同色后自然隐藏）
       setPaletteOpen(false);
       if (existsRef.current) {
         notesApi.save(noteId, { color: next }).catch(() => {});
@@ -676,6 +802,50 @@ export default function NoteView() {
     [noteId],
   );
 
+  /** 进入标题行内编辑（标题栏铅笔图标 → 菜单「重命名便签」）；
+   *  未落盘的新便签没有可命名的文件，不开放入口 */
+  const startTitleRename = useCallback(() => {
+    setTitleMenuOpen(false);
+    if (!existsRef.current) return;
+    setTitleRenaming(true);
+  }, []);
+
+  /** 标题行内编辑提交（Enter/blur）：客户端清洗文件系统非法字符
+   *  （30 字截断由服务端统一）；Esc 置取消标记后 blur 走同一出口 */
+  const commitTitleRename = useCallback(
+    (raw: string) => {
+      setTitleRenaming(false);
+      if (titleRenameCancelRef.current) {
+        titleRenameCancelRef.current = false;
+        return;
+      }
+      const v = raw.replace(/[\\/:*?"<>|]/g, '').trim();
+      if (!v || v === displayTitle) return; // 空值/未改动 = no-op（幂等）
+      notesApi
+        .save(noteId, { title: v, titleManual: true })
+        .then((note) => {
+          setTitle(note.title);
+          setTitleManual(note.titleManual ?? true);
+          window.api.notifyNotesChanged(); // 广播：主界面列表近实时刷新
+        })
+        .catch(() => {});
+    },
+    [noteId, displayTitle],
+  );
+
+  /** 恢复自动标题：服务端立即按当前正文重推导并重命名文件（所见即所得） */
+  const restoreAutoTitle = useCallback(() => {
+    setTitleMenuOpen(false);
+    notesApi
+      .save(noteId, { titleManual: false })
+      .then((note) => {
+        setTitle(note.title);
+        setTitleManual(false);
+        window.api.notifyNotesChanged();
+      })
+      .catch(() => {});
+  }, [noteId]);
+
   const stateText: Record<SaveState, string> = {
     loading: t('note.stateLoading'),
     idle: '',
@@ -683,6 +853,29 @@ export default function NoteView() {
     saved: t('note.stateSaved'),
     error: t('note.stateError'),
   };
+
+  /** 同步按钮派生态：仅「已配置且启用」时显示（未配置不渲染，不占工具栏宽度） */
+  const syncConfigured = !!(syncStatus?.configured && syncStatus.enabled);
+  /** 最后一次 git 同步的时间戳（零值/非法时间 = 0） */
+  const lastSyncMs = (() => {
+    if (!syncStatus?.lastSyncAt) return 0;
+    const d = new Date(syncStatus.lastSyncAt);
+    return !Number.isNaN(d.getTime()) && d.getFullYear() > 1 ? d.getTime() : 0;
+  })();
+  /** 未同步 = 本地与 git 不一致:上次同步之后有编辑(本地刚保存也算——
+   *  磁盘内容已领先 git)/保存失败/有待推送提交 */
+  const syncDirty =
+    lastEditAtRef.current > lastSyncMs ||
+    saveState === 'error' ||
+    (syncStatus?.ahead ?? 0) > 0;
+  const syncFailed = !syncing && !!syncStatus?.lastError;
+  const syncTip = syncing
+    ? t('note.syncTipSyncing')
+    : syncFailed
+      ? t('note.syncTipFailed')
+      : syncDirty
+        ? t('note.syncTipDirty')
+        : t('note.syncTipSynced', { time: formatRelativeTime(t, syncStatus?.lastSyncAt) });
 
   /** 编辑辅助区按钮：数组顺序即优先级（高 → 低），宽度不够时从尾部藏起，保底留加粗。
    *  A−/A＋ 缩放按钮排最末（该区最低优先级，最先被收）；收进 ⋯ 菜单的项见菜单渲染处。
@@ -744,7 +937,7 @@ export default function NoteView() {
   }, [allFolders, folderFilter]);
 
   const overlayOpen =
-    paletteOpen || menuOpen || newMenuOpen || tagPanelOpen || folderPanelOpen || groupMenuOpen;
+    paletteOpen || menuOpen || newMenuOpen || tagPanelOpen || folderPanelOpen || groupMenuOpen || titleMenuOpen;
 
   return (
     <>
@@ -817,9 +1010,13 @@ export default function NoteView() {
         ))}
       <div
       ref={rootRef}
-      className={`sticky-note${active ? ' is-active' : ''}${collapsed ? ' is-collapsed' : ''}${collapseAnim ? ' is-collapse-anim' : ''}${groupHover ? ' is-group-hover' : ''}${groupState && groupState.role !== 'solo' ? ` is-grouped is-group-${groupState.role}` : ''}`}
+      className={`sticky-note${active ? ' is-active' : ''}${collapsed ? ' is-collapsed' : ''}${collapseAnim ? ' is-collapse-anim' : ''}${groupHover ? ' is-group-hover' : ''}${imageDragActive ? ' is-image-drag' : ''}${groupState && groupState.role !== 'solo' ? ` is-grouped is-group-${groupState.role}` : ''}`}
       data-color={color}
       onMouseDownCapture={() => setActive(true)} /* 兜底：点击即激活，不依赖 focus 事件 */
+      onDragEnter={handleImageDragEnter}
+      onDragOver={handleImageDragOver}
+      onDragLeave={handleImageDragLeave}
+      onDrop={handleImageDrop}
     >
       <div className="sticky-note__titlebar">
         {/* 顺序：置顶 - 标题 - 新建 - 颜色 - 折叠 - 关闭；data-tip 驱动 CSS tooltip；
@@ -833,15 +1030,59 @@ export default function NoteView() {
         >
           <PinIcon />
         </button>
-        {/* 标题文字单独缩放（CSS zoom，Chromium 下排版自动重排）；
-            标题栏按钮留在缩放元素外 */}
-        <span className="sticky-note__title" style={{ zoom: zoomPct / 100 }}>
-          {displayTitle}
-        </span>
-        {/* 折叠态只留核心按钮：新建/颜色收起（底部栏已卸载，新建落点菜单无从依附） */}
+        {/* 重命名入口：标题前的实心下拉三角，点击弹标题菜单（重命名/恢复自动标题）；
+            未落盘新便签没有可命名的文件，禁用 */}
         {!collapsed && (
           <button
             className="sticky-note__btn"
+            data-tip={t('note.renameNote')}
+            aria-label={t('note.renameNote')}
+            disabled={!existsRef.current}
+            onClick={() => {
+              if (!existsRef.current) return;
+              setPaletteOpen(false);
+              setMenuOpen(false);
+              setNewMenuOpen(false);
+              setTagPanelOpen(false);
+              setFolderPanelOpen(false);
+              setGroupMenuOpen(false);
+              setConfirmDelete(false);
+              setTitleMenuOpen((v) => !v);
+            }}
+          >
+            <CaretDownFillIcon />
+          </button>
+        )}
+        {/* 标题文字单独缩放（CSS zoom，Chromium 下排版自动重排）；
+            标题栏按钮留在缩放元素外。
+            标题留在 drag 带内随整栏拖窗；改名走标题前的下拉三角按钮弹出的菜单 */}
+        {titleRenaming ? (
+          <input
+            className="sticky-note__title-input"
+            style={{ zoom: zoomPct / 100 }}
+            autoFocus
+            defaultValue={displayTitle}
+            placeholder={t('note.renamePlaceholder')}
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => commitTitleRename(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              else if (e.key === 'Escape') {
+                titleRenameCancelRef.current = true;
+                e.currentTarget.blur();
+              }
+            }}
+          />
+        ) : (
+          <span className="sticky-note__title" style={{ zoom: zoomPct / 100 }}>
+            {displayTitle}
+          </span>
+        )}
+        {/* 折叠态只留核心按钮：新建/颜色收起（底部栏已卸载，新建落点菜单无从依附）。
+            右上角小圆点 = 当前新建用色（dot 浅色档，与本便签同色时不显示） */}
+        {!collapsed && (
+          <button
+            className="sticky-note__btn sticky-note__createbtn"
             data-tip={t('header.create')}
             aria-label={t('header.create')}
             onClick={() => {
@@ -859,6 +1100,12 @@ export default function NoteView() {
             }}
           >
             <PlusIcon />
+            {newNoteColor !== color && (
+              <span
+                className="sticky-note__newdot"
+                style={{ background: COLORS.find((c) => c.key === newNoteColor)?.dot }}
+              />
+            )}
           </button>
         )}
         {!collapsed && (
@@ -907,7 +1154,7 @@ export default function NoteView() {
           <div className="sticky-note__banner-actions">
             <button
               className="sticky-note__banner-btn"
-              onClick={() => applyExternal(externalUpdate, title, false)}
+              onClick={() => applyExternal(externalUpdate, title, titleManual, false)}
             >
               {t('note.loadLatest')}
             </button>
@@ -961,6 +1208,7 @@ export default function NoteView() {
             setTagPanelOpen(false);
             setFolderPanelOpen(false);
             setGroupMenuOpen(false);
+            setTitleMenuOpen(false);
             setConfirmDelete(false);
           }}
         />
@@ -1080,6 +1328,29 @@ export default function NoteView() {
           >
             {folder ? <FolderFillIcon /> : <FolderIcon />}
           </button>
+          {/* 同步状态按钮：仅配置并启用 git 同步时渲染；四态（未同步线框/
+              已同步深色底/同步中旋转/失败红色），与保存状态文字同档优先级 */}
+          {hiddenAux < 2 && syncConfigured && (
+            <button
+              className={`sticky-note__btn sticky-note__syncbtn${
+                syncing ? ' is-spinning' : syncFailed ? ' is-error' : syncDirty ? ' is-dirty' : ' is-synced'
+              }`}
+              /* 已同步态换便签主题色 ink 图标（同标签/文件夹按钮的两态逻辑） */
+              style={
+                !syncing && !syncFailed && !syncDirty
+                  ? { color: COLORS.find((c) => c.key === color)?.ink }
+                  : undefined
+              }
+              data-tip={syncTip}
+              data-tip-place="top"
+              data-tip-align="right"
+              aria-label={t('note.syncNow')}
+              onClick={doSyncNow}
+            >
+              {/* 同步失败换错误图标（fill 款）——仅红色着色在彩色便签上不显眼 */}
+              {syncFailed ? <WarningCircleFillIcon /> : <ArrowsClockwiseIcon />}
+            </button>
+          )}
           {hiddenAux < 2 && (
             <span className="sticky-note__toolbar-state">{stateText[saveState]}</span>
           )}
@@ -1120,7 +1391,7 @@ export default function NoteView() {
       <input
         ref={imageInputRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/gif,image/webp"
         hidden
         onChange={pickImage}
       />
@@ -1320,6 +1591,24 @@ export default function NoteView() {
             <LinkBreakIcon />
             {t('note.dissolveGroup')}
           </button>
+        </div>
+      )}
+
+      {/* 标题菜单（铅笔图标按钮触发）：重命名便签（未落盘新便签按钮禁用）；
+          title_manual 时追加「恢复自动标题」。渲染在卡片内部，
+          需 -webkit-app-region: no-drag（同 menu--group 的热区教训） */}
+      {titleMenuOpen && (
+        <div className="sticky-note__menu sticky-note__menu--title">
+          <button className="sticky-note__menu-item" onClick={startTitleRename}>
+            <PencilSimpleIcon />
+            {t('note.renameNote')}
+          </button>
+          {titleManual && (
+            <button className="sticky-note__menu-item" onClick={restoreAutoTitle}>
+              <ArrowCounterClockwiseIcon />
+              {t('note.restoreAutoTitle')}
+            </button>
+          )}
         </div>
       )}
       </div>

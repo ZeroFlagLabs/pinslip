@@ -62,6 +62,14 @@ linux:
         - x64
   icon: resources/icon.png               # 1024px，deb 安装时自动派生各尺寸图标
   category: Utility
+  # KDE/任务栏关联：electron-builder 默认 StartupWMClass 取 productName(PinSlip),
+  # 但运行期 WM_CLASS 取 app.getName()——打包后 package.json 无 productName 时
+  # 回落 name 字段(@pinslip/desktop),默认值匹配不上导致 KDE 关联失败。
+  # 配套的 package.json desktopName 字段(@pinslipdesktop.desktop)是 deb 装出的
+  # .desktop 文件名(electron-builder 对 name sanitize 的结果),改包名或配
+  # executableName 时两处要同步
+  desktop:
+    StartupWMClass: '@pinslip/desktop'
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 # deb 元信息；depends 用 electron-builder 默认依赖列表（已覆盖 libgtk-3-0/libnss3 等运行库）

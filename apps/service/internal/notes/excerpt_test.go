@@ -13,16 +13,16 @@ func TestMakeExcerpt(t *testing.T) {
 		want string
 	}{
 		{"空正文", "", ""},
-		{"纯文本", "今天天气不错\n适合出门", "今天天气不错 适合出门"},
-		{"标题与引用", "# 周报\n\n> 本周进度良好", "周报 本周进度良好"},
-		{"列表与任务", "- 牛奶\n- [x] 鸡蛋\n1. 面包", "牛奶 鸡蛋 面包"},
+		{"纯文本", "今天天气不错\n适合出门", "今天天气不错\n适合出门"},
+		{"标题与引用", "# 周报\n\n> 本周进度良好", "周报\n本周进度良好"},
+		{"列表与任务", "- 牛奶\n- [x] 鸡蛋\n1. 面包", "牛奶\n鸡蛋\n面包"},
 		{"行内标记", "这**非常**重要，`code` 与 ~~作废~~ 文字", "这非常重要，code 与 作废 文字"},
 		{"链接留文字", "详见 [设计文档](https://example.com) 与 [A](https://a.b)", "详见 设计文档 与 A"},
-		{"图片留 alt", "界面长这样：![主界面截图](../attachments/a.png)\n结束", "界面长这样：主界面截图 结束"},
+		{"图片留 alt", "界面长这样：![主界面截图](../attachments/a.png)\n结束", "界面长这样：主界面截图\n结束"},
 		{"无 alt 图片去掉", "前面 ![](../attachments/a.png) 后面", "前面 后面"},
 		{"HTML 标签", "<p>剪藏 <b>正文</b></p>", "剪藏 正文"},
-		{"冲突标记跳过", "正常行\n<<<<<<< HEAD\n本地内容\n=======\n远端内容\n>>>>>>> other", "正常行 本地内容 远端内容"},
-		{"代码围栏跳过", "```go\nfmt.Println(1)\n```\n正文", "fmt.Println(1) 正文"},
+		{"冲突标记跳过", "正常行\n<<<<<<< HEAD\n本地内容\n=======\n远端内容\n>>>>>>> other", "正常行\n本地内容\n远端内容"},
+		{"代码围栏跳过", "```go\nfmt.Println(1)\n```\n正文", "fmt.Println(1)\n正文"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -34,13 +34,13 @@ func TestMakeExcerpt(t *testing.T) {
 }
 
 func TestMakeExcerptTruncation(t *testing.T) {
-	body := strings.Repeat("字", 250)
+	body := strings.Repeat("字", 600)
 	got := MakeExcerpt(body)
 	runes := []rune(got)
 	if len(runes) != ExcerptMaxRunes+1 || !strings.HasSuffix(got, "…") {
 		t.Fatalf("截断形态不对（应 %d 字 + 省略号）: len=%d", ExcerptMaxRunes, len(runes))
 	}
-	// 不足 100 字不补省略号
+	// 不足 ExcerptMaxRunes 字不补省略号
 	if got := MakeExcerpt("短内容"); strings.HasSuffix(got, "…") {
 		t.Fatalf("短内容不应有省略号: %q", got)
 	}

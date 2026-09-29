@@ -33,6 +33,14 @@ export interface EditorProps {
   folder?: string;
 }
 
+/** clipboardTextSerializer 参数的最小结构类型（避免仅为类型引入 prosemirror 值依赖） */
+interface ClipboardSliceLike {
+  content: {
+    size: number;
+    textBetween(from: number, to: number, blockSeparator?: string): string;
+  };
+}
+
 /** 对外暴露的编辑器句柄 */
 export interface EditorHandle {
   /** 聚焦编辑器并把光标移到文末（窗口激活/点空白区时直接可输入）。
@@ -43,8 +51,14 @@ export interface EditorHandle {
   /** 任务列表切换：非列表 → 包成无序列表并转为任务项；
    *  普通列表 → 选区内列表项转任务项；全为任务项 → 转回普通列表 */
   toggleTaskList(): void;
-  /** 在当前光标处插入图片节点（src 为写进 markdown 的相对路径） */
-  insertImage(src: string): void;
+  /** 在当前光标或给定视口坐标处插入图片节点。坐标不在编辑器内时追加到正文末尾。 */
+  insertImages(
+    images: { src: string; alt?: string }[],
+    at?: { left: number; top: number },
+  ): void;
+  /** 整篇文档的纯文本（块间单换行，与剪贴板序列化行为一致）；
+   *  编辑器未就绪时返回 null */
+  getPlainText(): string | null;
 }
 
 const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEditor(
@@ -126,13 +140,74 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
           view.dispatch(tr);
         });
       },
-      insertImage(src) {
-        if (loading) return;
+      insertImages(images, at) {
+        if (loading || images.length === 0) return;
         getEditor().action((ctx) => {
           const view = ctx.get(editorViewCtx);
-          const imageNode = view.state.schema.nodes.image.create({ src });
-          view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
+          if (!at) {
+            let tr = view.state.tr;
+            if (!tr.selection.empty) tr = tr.deleteSelection();
+            // 逐张在选区后插入并手动步进:replaceSelectionWith 会把选区设为
+            // 刚插入的 atom 节点,第二张图会覆盖第一张
+            let pos = tr.selection.to;
+            for (const image of images) {
+              const node = view.state.schema.nodes.image.create({
+                src: image.src,
+                alt: image.alt ?? '',
+              });
+              tr = tr.insert(pos, node);
+              pos += node.nodeSize;
+            }
+            view.dispatch(tr);
+            return;
+          }
+
+          const hit = view.posAtCoords(at);
+          let insertPos: number | null = null;
+          if (hit) {
+            const $hit = view.state.doc.resolve(hit.pos);
+            if ($hit.parent.isTextblock && !$hit.parent.type.spec.code) insertPos = hit.pos;
+          }
+          // 拖到标题栏/工具栏也算拖进这张便签:追加到最后一个文本块,
+          // 而不是让 Chromium 把窗口导航到文件路径
+          if (insertPos === null) {
+            view.state.doc.descendants((node, pos) => {
+              if (node.isTextblock && !node.type.spec.code) {
+                insertPos = pos + 1 + node.content.size;
+              }
+            });
+          }
+          if (insertPos === null) {
+            const nodes = images.map((image) =>
+              view.state.schema.nodes.image.create({ src: image.src, alt: image.alt ?? '' }),
+            );
+            const paragraph = view.state.schema.nodes.paragraph.create(null, nodes);
+            view.dispatch(view.state.tr.insert(view.state.doc.content.size, paragraph));
+            return;
+          }
+          let tr = view.state.tr;
+          let offset = 0;
+          for (const image of images) {
+            const node = view.state.schema.nodes.image.create({
+              src: image.src,
+              alt: image.alt ?? '',
+            });
+            tr = tr.insert(insertPos + offset, node);
+            offset += node.nodeSize;
+          }
+          view.dispatch(tr);
         });
+      },
+      getPlainText() {
+        if (loading) return null;
+        let text = '';
+        getEditor().action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          // 与 clipboardTextSerializer 同一约定：块间单换行；
+          // 不传 leafText，hardbreak 仍为 \n、image 跳过
+          text = view.state.doc.textBetween(0, view.state.doc.content.size, '\n');
+        });
+        return text;
       },
     }),
     [loading, getEditor],
@@ -156,6 +231,9 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
           ['image', createImageView] as (typeof views)[number],
         ]);
         // 粘贴图片：上传 vault attachments/ 后插入 image 节点（markdown 存相对路径，前缀深度随文件夹）
+        // 复制纯文本：块间分隔符从默认 "\n\n" 改为 "\n"——默认是 markdown 段落语义
+        // （段落隔空行），但段距只有 2px，用户按 Enter 的感知是「换行」，
+        // 复制到记事本/聊天框等纯文本目标会多一个空行
         ctx.update(editorViewOptionsCtx, (options) => ({
           ...options,
           // 关掉拼写检查：代码/命令里的英文词会被拼写检查画满红波浪线
@@ -164,6 +242,8 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
             spellcheck: 'false',
           },
           handlePaste: handleImagePaste(folder),
+          clipboardTextSerializer: (slice: ClipboardSliceLike) =>
+            slice.content.textBetween(0, slice.content.size, '\n'),
         }));
         ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, _prev) => {
           onChange(markdown);

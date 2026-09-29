@@ -7,6 +7,8 @@ export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'purple' | 'orang
 export interface Note {
   id: string;
   title: string;
+  /** 手动标题标志（true = 用户重命名，正文保存不再自动推导） */
+  titleManual?: boolean;
   content: string;
   tags: string[];
   source: string;
@@ -42,6 +44,8 @@ export interface NoteMeta {
   wordCount: number;
   /** 内容含 git 冲突标记行（^<<<<<<< ），列表显示「待解冲突」标识 */
   conflicted: boolean;
+  /** 正文纯文本摘要（服务端 MakeExcerpt 生成，列表预览用；空正文缺省） */
+  excerpt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,6 +54,8 @@ export interface NoteMeta {
 export interface SaveNoteInput {
   content?: string;
   title?: string;
+  /** 手动标题标志：不传 = 保留；true = 手动标题；false = 恢复自动（服务端立即按正文重推导） */
+  titleManual?: boolean;
   tags?: string[];
   pin?: boolean;
   source?: string;
@@ -103,6 +109,15 @@ export interface SyncStatus {
   conflictedFiles: string[];
   /** 当前生效的自动推拉间隔（分钟） */
   pushIntervalMin: number;
+  /** 分叉参考信息：仅 lastErrorCode === 'SYNC_UNRELATED_HISTORIES' 时出现——
+   *  远端 head 是否含 .pinslip-repo 标记（false/缺省都不给接管入口） */
+  remoteIsPinslip?: boolean;
+  /** 远端最后提交时间（基于最近一次 fetch 的 origin 引用，RFC3339） */
+  remoteLastCommitAt?: string;
+  /** 本地 worktree notes/ 下 .md 数（分叉时供用户判断选哪边） */
+  localNotes?: number;
+  /** 远端 head 树 notes/ 下 .md 数 */
+  remoteNotes?: number;
 }
 
 /** PUT /api/sync/config 请求体；token 空串 = 不修改已存 token */
@@ -115,6 +130,12 @@ export interface SaveSyncConfigInput {
   enabled: boolean;
   /** 自动推拉间隔（分钟，1~1440）；缺省/非法 Go 侧回退默认 10 */
   pushIntervalMin?: number;
+  /**
+   * 一次性认领标志：仅当接入报 SYNC_LOCAL_NOT_PINSLIP_REPO（本地已是 git
+   * 仓库但缺 .pinslip-repo 标记）且用户显式确认时传 true——服务端创建标记
+   * 并提交后完成接入。不落盘，其他错误码下无效。
+   */
+  adopt?: boolean;
 }
 
 /** 主进程提供给渲染进程的运行时信息 */
@@ -128,6 +149,30 @@ export interface RuntimeInfo {
   /** 应用版本号（package.json version，设置页展示用） */
   version: string;
 }
+
+/** 空白便签全局快捷键预设键位白名单（'off' = 不注册，缺省）。
+ *  main/渲染共用的单一来源：渲染层只能选这些值，main 侧注册前再校验 */
+export type BlankNoteShortcut = 'off' | 'ctrl+alt+n' | 'ctrl+shift+alt+n' | 'ctrl+alt+insert';
+
+/** 高级定制选项（应用设置 settings.json 的 advanced 对象，main/渲染共用）。
+ *  全部字段可选且有缺省值（缺省 = 简洁模型现状），新增选项 = 加字段，零新增 IPC */
+export interface AdvancedSettings {
+  /** 系统托盘图标显隐（缺省 true）；关闭后全部窗口关闭时应用退出 */
+  trayIcon?: boolean;
+  /** 主窗口任务栏图标显隐（缺省 true）；仅作用于主窗口，便签窗口任务栏入口不受影响 */
+  taskbarIcon?: boolean;
+  /** 新便签落点（缺省 'cascade' 固定位置级联；
+   *  'beside-manager' = 跟随主窗口——仅全新便签且主窗口可见时生效） */
+  notePlacement?: 'cascade' | 'beside-manager';
+  /** 管理器主题（缺省 'light' 浅色现状；'system' = 跟随 OS 深色模式）；
+   *  仅作用于主窗口与设置抽屉，便签窗口/速记窗口不受影响，列表卡片六色不主题化 */
+  managerTheme?: 'light' | 'dark' | 'system';
+  /** 空白便签全局快捷键（缺省 'off' 不注册）：按下在根目录新建空白便签并聚焦 */
+  blankNoteShortcut?: BlankNoteShortcut;
+}
+
+/** 补齐缺省值后的高级定制选项（settings:get-advanced 的返回形态） */
+export type ResolvedAdvancedSettings = Required<AdvancedSettings>;
 
 /** 自动更新状态机（主进程唯一权威，渲染层只展示）：
  *  idle → checking → available → downloading → downloaded；
@@ -176,8 +221,16 @@ export interface ElectronAPI {
   getLanguage(): Promise<{ preference: string; systemLocale: string }>;
   /** 持久化界面语言偏好（'system' 或具体语言码） */
   setLanguage(lang: string): Promise<void>;
+  /** 查询高级定制选项（整对象，缺省字段已由主进程补默认值） */
+  getAdvanced(): Promise<ResolvedAdvancedSettings>;
+  /** 按键部分更新高级定制选项（即改即存即生效），返回补齐后的完整对象 */
+  setAdvanced(patch: AdvancedSettings): Promise<ResolvedAdvancedSettings>;
   /** 订阅界面语言切换广播（任一窗口改语言后，其他已开窗口即时跟进），返回取消订阅函数 */
   onLanguageChanged(cb: (lang: string) => void): () => void;
+  /** 查询 OS 深色模式事实（nativeTheme.shouldUseDarkColors） */
+  getOsDark(): Promise<boolean>;
+  /** 订阅 OS 深色模式变更广播（managerTheme='system' 时渲染层即时跟进），返回取消订阅函数 */
+  onOsThemeChanged(cb: (osDark: boolean) => void): () => void;
   /** 通知主进程：笔记数据已变更（保存/删除/速记），用于广播刷新主界面列表 */
   notifyNotesChanged(): void;
   /** 订阅笔记变更广播（主界面列表近实时刷新），返回取消订阅函数 */

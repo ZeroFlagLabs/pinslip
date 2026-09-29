@@ -391,7 +391,7 @@ func TestListNotesExcerpt(t *testing.T) {
 	}
 	m := structuredMap(t, call(t, h.listNotes, nil))
 	item := m["items"].([]any)[0].(map[string]any)
-	if item["excerpt"] != "项目周报 进度良好，详见 看板 架构图" {
+	if item["excerpt"] != "项目周报\n进度良好，详见 看板\n架构图" {
 		t.Errorf("excerpt 不符: %q", item["excerpt"])
 	}
 	for _, k := range []string{"id", "title", "folder", "tags", "createdAt", "updatedAt"} {

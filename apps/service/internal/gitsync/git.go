@@ -72,23 +72,67 @@ func Connect(dir string, cfg SyncConfig) (*Repo, error) {
 	if err := cfg.normalize(); err != nil {
 		return nil, err
 	}
+	r, err := connect(dir, cfg)
+	if err == nil || !repairIfBroken(dir, cfg.Branch) {
+		return r, err
+	}
+	// 有修复动作才重试一次；重试仍败原样返回首次错误（不循环自愈，
+	// 修复后再撕裂意味着更深的问题，应暴露给用户）
+	if r2, err2 := connect(dir, cfg); err2 == nil {
+		return r2, nil
+	}
+	return r, err
+}
+
+// connect 单次接入尝试（Connect 去掉自愈重试的主体；cfg 已 normalize）。
+func connect(dir string, cfg SyncConfig) (*Repo, error) {
 	repo := &Repo{dir: dir, cfg: cfg}
 
-	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+	// 只有「不存在」才走首次接入；stat 的其他错误（典型：权限拒绝）
+	// 不能折叠进 firstConnect，否则权限问题会被兜底码掩盖。
+	if _, err := osStat(filepath.Join(dir, ".git")); err == nil {
 		return repo.openExisting()
+	} else if !os.IsNotExist(err) {
+		return nil, localIOErr("检查 .git 目录失败", err)
 	}
 	return repo.firstConnect()
+}
+
+// osStat / osWriteFile 是测试替换点：EACCES/EPERM 在 Windows 上无法靠
+// chmod 模拟（NTFS 权限模型不映射 POSIX 模式位），测试替换这两个变量注入错误。
+var (
+	osStat      = os.Stat
+	osWriteFile = os.WriteFile
+)
+
+// localIOErr 包装 vault 本地文件读写错误：权限错误（EACCES/EPERM）贴
+// CodeSyncLocalPermission 并给可操作的文案；其余错误原样包装（走调用方兜底码）。
+func localIOErr(op string, err error) error {
+	// os.IsPermission 只识别原生 *PathError 链，errors.Is 兜底包装场景
+	if os.IsPermission(err) || errors.Is(err, os.ErrPermission) {
+		return withCode(CodeSyncLocalPermission, fmt.Errorf("没有权限读写同步文件夹，请检查文件夹权限或以合适身份运行（%s: %w）", op, err))
+	}
+	return fmt.Errorf("%s: %w", op, err)
 }
 
 // openExisting 打开已有 .git 的 vault：必须是 pinslip 同步仓库（有标记）。
 func (r *Repo) openExisting() (*Repo, error) {
 	gr, err := git.PlainOpen(r.dir)
 	if err != nil {
-		return nil, fmt.Errorf("打开 vault 仓库失败: %w", err)
+		return nil, localIOErr("打开 vault 仓库失败", err)
 	}
-	// 标记文件在工作区或任一提交里存在即可认定是 pinslip 仓库
-	if _, err := os.Stat(filepath.Join(r.dir, markerFile)); err != nil {
-		if !r.markerInHistory(gr) {
+	// 标记文件在工作区或任一提交里存在即可认定是 pinslip 仓库。
+	// 只有「不存在」才查历史；stat 的其他错误（典型：权限拒绝）直接上报，
+	// 不能当成「标记缺失」误报 SYNC_LOCAL_NOT_PINSLIP_REPO。
+	if _, err := osStat(filepath.Join(r.dir, markerFile)); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, localIOErr("检查同步标记失败", err)
+		}
+		hasMarker, err := r.markerInHistory(gr)
+		if err != nil {
+			return nil, err
+		}
+		if !hasMarker {
 			return nil, withCode(CodeSyncLocalNotPinslipRepo, errors.New("vault 已是一个 git 仓库但不是 PinSlip 同步仓库（缺少 .pinslip-repo 标记），请手动处理 .git 后再配置同步"))
 		}
 	}
@@ -97,25 +141,51 @@ func (r *Repo) openExisting() (*Repo, error) {
 		return nil, err
 	}
 	// .gitignore / 标记文件补齐（老仓库可能缺）：写入后由后续 commit-all 提交
-	_ = os.WriteFile(filepath.Join(r.dir, ".gitignore"), []byte(gitignoreContent), 0o644)
-	_ = os.WriteFile(filepath.Join(r.dir, markerFile), []byte(markerContent), 0o644)
+	if err := r.writeMetaFiles(); err != nil {
+		return nil, err
+	}
 	return r, nil
 }
 
 // markerInHistory 检查 HEAD 提交树里是否有标记文件。
-func (r *Repo) markerInHistory(gr *git.Repository) bool {
+// 读历史失败（如 .git 内对象读权限拒绝）返回错误而非 false——
+// 「读不了」不能当「不是」，否则权限问题被误报成 SYNC_LOCAL_NOT_PINSLIP_REPO。
+func (r *Repo) markerInHistory(gr *git.Repository) (bool, error) {
 	head, err := gr.Head()
 	if err != nil {
-		return false
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return false, nil // 空仓库（无提交）：历史里没有标记
+		}
+		return false, localIOErr("读取提交历史失败", err)
 	}
 	c, err := gr.CommitObject(head.Hash())
 	if err != nil {
-		return false
+		return false, localIOErr("读取提交历史失败", err)
 	}
-	if _, err := c.File(markerFile); err == nil {
-		return true
+	if _, err := c.File(markerFile); err != nil {
+		if errors.Is(err, object.ErrFileNotFound) {
+			return false, nil
+		}
+		return false, localIOErr("读取提交历史失败", err)
 	}
-	return false
+	return true, nil
+}
+
+// remoteHasMarker 基于最近一次 fetch 的 origin/<branch> 引用检查远端 head 树
+// 是否含标记文件（只读本地引用，绝不发起网络请求）；本地还没有该引用时报错。
+func (r *Repo) remoteHasMarker() (bool, error) {
+	ref, err := r.r.Reference(plumbing.NewRemoteReferenceName("origin", r.cfg.Branch), true)
+	if err != nil {
+		return false, err
+	}
+	c, err := r.r.CommitObject(ref.Hash())
+	if err != nil {
+		return false, err
+	}
+	if _, err := c.File(markerFile); err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 // ensureRemote 保证 origin 指向配置的 URL（不存在则建，不同则改）。
@@ -295,12 +365,77 @@ func (r *Repo) ensureNoDirtyOverlap(changes object.Changes) error {
 	return nil
 }
 
-// writeMetaFiles 写入 .gitignore 与标记文件（幂等）。
+// writeMetaFiles 写入 .gitignore（合并语义）与标记文件（幂等）。
+// 写失败（典型：权限拒绝）必须报错——静默丢弃会把问题推迟到 CommitAll
+// 才以 SYNC_COMMIT_FAILED 爆出，掩盖真实原因。
 func (r *Repo) writeMetaFiles() error {
-	if err := os.WriteFile(filepath.Join(r.dir, ".gitignore"), []byte(gitignoreContent), 0o644); err != nil {
+	if err := ensureGitignore(r.dir); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(r.dir, markerFile), []byte(markerContent), 0o644)
+	if err := osWriteFile(filepath.Join(r.dir, markerFile), []byte(markerContent), 0o644); err != nil {
+		return localIOErr("写入同步标记失败", err)
+	}
+	return nil
+}
+
+// ensureGitignore 保证 .gitignore 覆盖全部必需条目：
+// 不存在则创建标准内容；已存在则只在末尾追加缺失条目，用户原有内容
+// 一字节不动——认领用户自建仓库时绝不能覆盖人家的 .gitignore。
+// pinslip 自建仓库内容已一致时 no-op。
+func ensureGitignore(dir string) error {
+	p := filepath.Join(dir, ".gitignore")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return localIOErr("读取 .gitignore 失败", err)
+		}
+		if err := osWriteFile(p, []byte(gitignoreContent), 0o644); err != nil {
+			return localIOErr("写入 .gitignore 失败", err)
+		}
+		return nil
+	}
+	have := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		have[strings.TrimSpace(line)] = true
+	}
+	var missing []string
+	for _, entry := range strings.Fields(gitignoreContent) {
+		if !have[entry] {
+			missing = append(missing, entry)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	content := string(data)
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	content += strings.Join(missing, "\n") + "\n"
+	if err := osWriteFile(p, []byte(content), 0o644); err != nil {
+		return localIOErr("写入 .gitignore 失败", err)
+	}
+	return nil
+}
+
+// AdoptLocalMarker 认领「已是 git 仓库但缺标记」的本地 vault：写入
+// .pinslip-repo 标记、合并补齐 .gitignore，并立即 CommitAll 提交
+// （PinSlip 签名；工作区现有未提交变更会一并入库——与首次接入空远端的
+// 全量提交语义一致，认领前的提示文案已向用户声明）。仅在用户显式确认
+// 后由 Reconfigure（adopt=true）调用，守卫本身不因此削弱。
+func AdoptLocalMarker(dir string) error {
+	gr, err := git.PlainOpen(dir)
+	if err != nil {
+		return localIOErr("打开 vault 仓库失败", err)
+	}
+	r := &Repo{r: gr, dir: dir}
+	if err := r.writeMetaFiles(); err != nil {
+		return err
+	}
+	if _, _, err := r.CommitAll(); err != nil {
+		return fmt.Errorf("提交认领标记失败: %w", err)
+	}
+	return nil
 }
 
 // listRemoteRefs ls-remote：列出远端全部引用（用于判断远端是否为空）。
@@ -325,7 +460,27 @@ func (r *Repo) Fetch() error {
 
 // CommitAll 提交工作区全部变更（add -A 语义），返回提交哈希与文件数；
 // 无变更时返回零值。提交消息：sync YYYY-MM-DD HH:mm (n files)。
+// 失败时先跑 .git 自愈诊断（repair.go），有修复动作才重试一次。
 func (r *Repo) CommitAll() (plumbing.Hash, int, error) {
+	hash, n, err := r.commitAll()
+	if err == nil || !repairIfBroken(r.dir, r.cfg.Branch) {
+		return hash, n, err
+	}
+	// 有修复动作才重试一次；重试仍败原样返回首次错误（不循环自愈）
+	hash2, n2, err2 := r.commitAll()
+	if err2 == nil {
+		return hash2, n2, nil
+	}
+	if errors.Is(err2, git.ErrEmptyCommit) {
+		// 索引重建后 status 转干净（worktree 与 HEAD 内容本就一致）：
+		// 与 clean 提前返回同语义——修复成功且本无变更，不是失败
+		return plumbing.ZeroHash, 0, nil
+	}
+	return hash, n, err
+}
+
+// commitAll 单次提交尝试（CommitAll 去掉自愈重试的主体）。
+func (r *Repo) commitAll() (plumbing.Hash, int, error) {
 	w, err := r.r.Worktree()
 	if err != nil {
 		return plumbing.ZeroHash, 0, err
@@ -489,6 +644,55 @@ func (r *Repo) Push() error {
 		return nil
 	}
 	return err
+}
+
+// ForcePush 强制推送本地分支覆盖远端（分叉接管「以本地为准」用，
+// 远端分叉历史被丢弃——代价已在确认文案中向用户声明）。
+func (r *Repo) ForcePush() error {
+	err := r.r.Push(&git.PushOptions{RemoteName: "origin", Auth: r.auth(), Force: true})
+	if errors.Is(err, git.NoErrAlreadyUpToDate) {
+		return nil
+	}
+	return err
+}
+
+// ResetToRemote 分叉接管「以远端为准」：fetch 后把本地分支重置到
+// origin/<branch>，并按树差异检出（只动差异路径，运行时文件不动——
+// 与 fastForward 同纪律，见 applyTreeDiff 注释）。
+// checkDirty=false：调用方已把 notes//inbox//attachments/ 备份到
+// .pinslip/backups/，覆盖保护由备份兜底，不再拦截脏路径。
+func (r *Repo) ResetToRemote() error {
+	if err := r.Fetch(); err != nil {
+		return fmt.Errorf("fetch 失败: %w", err)
+	}
+	remoteRef, err := r.r.Reference(plumbing.NewRemoteReferenceName("origin", r.cfg.Branch), true)
+	if err != nil {
+		return withCode(CodeSyncBranchNotFound, fmt.Errorf("远端没有分支 %q", r.cfg.Branch))
+	}
+	remote, err := r.r.CommitObject(remoteRef.Hash())
+	if err != nil {
+		return err
+	}
+	var from *object.Commit
+	head, err := r.r.Head()
+	switch {
+	case err == nil:
+		if from, err = r.r.CommitObject(head.Hash()); err != nil {
+			return err
+		}
+	case errors.Is(err, plumbing.ErrReferenceNotFound):
+		from = nil // 本地无提交：按空树全量检出
+	default:
+		return err
+	}
+	if err := r.r.Storer.SetReference(plumbing.NewHashReference(
+		plumbing.NewBranchReferenceName(r.cfg.Branch), remoteRef.Hash())); err != nil {
+		return err
+	}
+	if err := r.applyTreeDiff(from, remote, false); err != nil {
+		return fmt.Errorf("检出远端内容失败: %w", err)
+	}
+	return nil
 }
 
 // PushContext 带超时的推送（退出时尽力 push 用）。

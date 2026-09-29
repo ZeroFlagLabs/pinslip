@@ -16,6 +16,7 @@ package gitsync
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -379,6 +380,15 @@ func (e *Engine) Reconfigure(in SyncConfig) error {
 	// 同步接入一次：失败立即把原因反馈给调用方（同时落 lastError）。
 	e.opMu.Lock()
 	repo, err := Connect(e.vaultDir, in)
+	if err != nil && in.Adopt && codeOf(err) == CodeSyncLocalNotPinslipRepo {
+		// 本地认领：用户显式确认缺标记的自有仓库也要接入——补标记并提交后重试。
+		// 仍在 opMu 临界区内，与同步循环天然串行（循环在成功后才起）。
+		if aerr := AdoptLocalMarker(e.vaultDir); aerr != nil {
+			err = fmt.Errorf("认领本地仓库失败: %w", aerr)
+		} else {
+			repo, err = Connect(e.vaultDir, in)
+		}
+	}
 	e.opMu.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -428,6 +438,15 @@ type Status struct {
 	ConflictedFiles []string `json:"conflictedFiles"`
 	// PushIntervalMin 当前生效的自动推拉间隔（分钟）
 	PushIntervalMin int `json:"pushIntervalMin"`
+
+	// 分叉参考信息：仅 LastErrorCode == SYNC_UNRELATED_HISTORIES 时计算，
+	// 供渲染层分叉接管面板展示（详见 divergence.go）；非分叉状态一律缺省。
+	// RemoteIsPinslip 用指针区分「算过=false」与「没算/算不了=缺省」
+	// （本地无 origin 引用时远端信息不可得，字段留缺省不阻断 status）。
+	RemoteIsPinslip    *bool      `json:"remoteIsPinslip,omitempty"`
+	RemoteLastCommitAt *time.Time `json:"remoteLastCommitAt,omitempty"`
+	LocalNotes         int        `json:"localNotes,omitempty"`
+	RemoteNotes        int        `json:"remoteNotes,omitempty"`
 }
 
 // GetStatus 汇总状态：ahead/behind 现场算（基于最近一次 fetch 的远端位置，
@@ -456,6 +475,11 @@ func (e *Engine) GetStatus() Status {
 		if ahead, behind, err := repo.AheadBehind(); err == nil {
 			st.Ahead, st.Behind = ahead, behind
 		}
+	}
+	// 分叉参考信息只在分叉状态计算（本地读，无网络请求）；正常同步路径零开销
+	if st.LastErrorCode == CodeSyncUnrelatedHistories && repo != nil {
+		st.LocalNotes = countWorktreeNotes(e.vaultDir)
+		fillRemoteDivergenceInfo(repo, &st)
 	}
 	// 现场扫描为准：覆盖「pull 下来的 markers 文件」与「用户已手工解决」两侧变化
 	st.ConflictedFiles = scanConflictedFiles(e.vaultDir)

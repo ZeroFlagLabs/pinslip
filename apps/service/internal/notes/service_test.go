@@ -2,6 +2,7 @@ package notes
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -345,6 +346,90 @@ func TestRenameOnTitleChange(t *testing.T) {
 	}
 	if strings.Contains(base, "旧标题") {
 		t.Fatalf("path still uses old title: %q", p)
+	}
+}
+
+// 手动标题：title_manual 只有「重命名」入口能置位；显式传 Title（MCP patch/速记聚合/
+// 剪藏）不置 manual；titleManual=false 立即按正文重推导并重命名文件。
+func TestManualTitle(t *testing.T) {
+	cases := []struct {
+		name       string
+		steps      []SaveInput
+		wantTitle  string
+		wantManual bool
+		wantSlug   string // 落盘文件名应包含的标题 slug
+	}{
+		{
+			name: "手动标题不被正文保存覆盖",
+			steps: []SaveInput{
+				{Content: strPtr("# 原始标题\n\n正文")},
+				{Title: "常用命令", TitleManual: boolPtr(true)},
+				{Content: strPtr("# 改动后的首行\n\n新正文")},
+			},
+			wantTitle:  "常用命令",
+			wantManual: true,
+			wantSlug:   "常用命令",
+		},
+		{
+			name: "恢复自动标题立即重推导并重命名文件",
+			steps: []SaveInput{
+				{Content: strPtr("# 正文标题\n\n内容")},
+				{Title: "我的便签", TitleManual: boolPtr(true)},
+				{TitleManual: boolPtr(false)},
+			},
+			wantTitle:  "正文标题",
+			wantManual: false,
+			wantSlug:   "正文标题",
+		},
+		{
+			name: "显式 Title 不传 TitleManual 不置 manual（MCP/速记/剪藏回归守卫）",
+			steps: []SaveInput{
+				{Content: strPtr("# 初稿\n\n内容")},
+				{Content: strPtr("### 09:30\n\n条目"), Title: "速记 2026-07-23"},
+				{Content: strPtr("# 新首行\n\n内容")},
+			},
+			wantTitle:  "新首行",
+			wantManual: false,
+			wantSlug:   "新首行",
+		},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, store := newTestService(t)
+			id := fmt.Sprintf("mt%04d", i)
+			var note *Note
+			for j, in := range tc.steps {
+				var err error
+				note, err = svc.Save(id, in)
+				if err != nil {
+					t.Fatalf("step %d Save: %v", j, err)
+				}
+			}
+			if note.Title != tc.wantTitle {
+				t.Errorf("Title = %q, want %q", note.Title, tc.wantTitle)
+			}
+			if note.TitleManual != tc.wantManual {
+				t.Errorf("TitleManual = %v, want %v", note.TitleManual, tc.wantManual)
+			}
+			p, _, err := store.Locate(id)
+			if err != nil {
+				t.Fatalf("Locate: %v", err)
+			}
+			base := filepath.Base(p)
+			if !strings.Contains(base, tc.wantSlug) {
+				t.Errorf("path = %q, want slug of %q", p, tc.wantSlug)
+			}
+			data, err := os.ReadFile(p)
+			if err != nil {
+				t.Fatalf("ReadFile: %v", err)
+			}
+			if tc.wantManual && !strings.Contains(string(data), "title_manual: true") {
+				t.Errorf("frontmatter 应含 title_manual: true:\n%s", data)
+			}
+			if !tc.wantManual && strings.Contains(string(data), "title_manual") {
+				t.Errorf("frontmatter 不应含 title_manual（omitempty）:\n%s", data)
+			}
+		})
 	}
 }
 

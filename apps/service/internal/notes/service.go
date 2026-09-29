@@ -67,9 +67,17 @@ func (s *Service) Save(id string, in SaveInput) (*Note, error) {
 		content = *in.Content
 	}
 
+	if in.TitleManual != nil {
+		fm.TitleManual = *in.TitleManual
+		if !fm.TitleManual {
+			// 恢复自动标题：立即用当前正文重推导，文件随 store 保存重命名（所见即所得）
+			fm.Title = deriveTitle(content)
+		}
+	}
 	if in.Title != "" {
+		// 显式传标题 ≠ 用户手动改名（MCP patch/速记聚合/剪藏都显式传 title），不置 manual 位
 		fm.Title = in.Title
-	} else if in.Content != nil {
+	} else if in.Content != nil && !fm.TitleManual {
 		// 内容变化时重新推导标题：客户端不传 title 即「自动标题」，
 		// 主界面列表才能和便签窗口的实时标题保持一致
 		fm.Title = deriveTitle(content)
@@ -397,20 +405,21 @@ func toNote(fm *storage.Frontmatter, body string, inbox bool, folder string) *No
 		tags = []string{}
 	}
 	return &Note{
-		ID:        fm.ID,
-		Title:     fm.Title,
-		Content:   body,
-		Tags:      tags,
-		Source:    fm.Source,
-		Pin:       fm.Pin,
-		Color:     fm.Color,
-		Collapsed: fm.Collapsed,
-		Zoom:      fm.Zoom,
-		Group:     fm.Group,
-		Inbox:     inbox,
-		Folder:    folder,
-		CreatedAt: parseTime(fm.CreatedAt),
-		UpdatedAt: parseTime(fm.UpdatedAt),
+		ID:          fm.ID,
+		Title:       fm.Title,
+		TitleManual: fm.TitleManual,
+		Content:     body,
+		Tags:        tags,
+		Source:      fm.Source,
+		Pin:         fm.Pin,
+		Color:       fm.Color,
+		Collapsed:   fm.Collapsed,
+		Zoom:        fm.Zoom,
+		Group:       fm.Group,
+		Inbox:       inbox,
+		Folder:      folder,
+		CreatedAt:   parseTime(fm.CreatedAt),
+		UpdatedAt:   parseTime(fm.UpdatedAt),
 	}
 }
 

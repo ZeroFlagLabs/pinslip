@@ -34,6 +34,11 @@ export interface WinCal {
   cy: number;
 }
 
+/** 便签展开态最小高度（DIP）：低于它的非折叠存储高度视为脏数据。
+ *  定义在此而非 note-window.ts：写侧止血（saveWindowState）也要用，
+ *  放这里避免 note-window ↔ window-state 循环依赖 */
+export const NOTE_MIN_EXPANDED_HEIGHT = 160;
+
 let cache: Record<string, WindowState> | null = null;
 let saveTimer: NodeJS.Timeout | null = null;
 
@@ -60,6 +65,21 @@ function schedulePersist(): void {
       /* 磁盘写入失败不影响使用 */
     }
   }, 500);
+}
+
+/** 立即落盘（before-quit 用）：清掉未触发的防抖计时器并同步写盘，
+ *  否则退出前最后 500ms 内的位置/尺寸变更会丢 */
+export function flushWindowState(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (!cache) return;
+  try {
+    fs.writeFileSync(statePath(), JSON.stringify(cache, null, 2));
+  } catch {
+    /* 磁盘写入失败不影响退出 */
+  }
 }
 
 /** 位置是否与任一显示器工作区相交（拔外接屏/改分辨率后防止窗口丢到屏外） */
@@ -127,6 +147,19 @@ export function saveWindowState(key: string, win: BrowserWindow, cal?: WinCal | 
     }
   }
   const prev = loadAll()[key];
+  // 止血:非折叠便签算出的存储高度低于展开最小高(×K)时,窗口正处于异常
+  // 小高度(K 漂移滚雪球的中间态)——保留已有高度不覆盖,雪球停在 160 不再
+  // 下钻;恢复侧(note-window 创建兜底)会把它矫正回默认高度
+  const k = cal?.k ?? 1;
+  if (
+    key.startsWith('note:') &&
+    !prev?.collapsed &&
+    physical.height < NOTE_MIN_EXPANDED_HEIGHT * k &&
+    prev &&
+    prev.height > physical.height
+  ) {
+    physical = { ...physical, height: prev.height };
+  }
   loadAll()[key] = { ...prev, ...physical };
   schedulePersist();
 }

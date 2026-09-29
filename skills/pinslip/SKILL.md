@@ -29,7 +29,7 @@ AI agent 可通过 Streamable HTTP 读写便签并触发 git 同步。
 
 | 字段 | 含义 |
 | --- | --- |
-| `port` | HTTP 端口（每次启动随机） |
+| `port` | HTTP 端口（优先知名端口 17639，被占用回退随机，以本文件为准） |
 | `pid` | 服务进程号（可探测存活） |
 | `version` | pinslipd 版本 |
 | `mcpPath` | MCP 端点路径（固定 `/mcp`） |
@@ -67,7 +67,7 @@ vault 位置：默认 `~/Documents/PinSlip`（Windows：`C:\Users\<你>\Document
 任何支持 Streamable HTTP 的客户端：server 类型选 `http` / `streamable-http`，
 URL 填 `http://127.0.0.1:<port>/mcp`，无需鉴权头。
 
-> 端口每次启动随机，务必先从 mcp.json 读取，不要写死。
+> 端口优先绑 17639、被占用才回退随机，务必先从 mcp.json 读取实际值，不要写死。
 > 应用设置里「复制接入信息」按钮可直接复制上面这段配置。
 
 ## 3. 工具一览（12 个）

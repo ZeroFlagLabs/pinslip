@@ -29,6 +29,11 @@ type SyncConfig struct {
 	Enabled  bool   `json:"enabled"`
 	// PushIntervalMin 自动推拉间隔（分钟）；0/越界在 normalize 回退默认 10
 	PushIntervalMin int `json:"pushIntervalMin,omitempty"`
+	// Adopt 是一次性认领标志：仅当 Connect 报 SYNC_LOCAL_NOT_PINSLIP_REPO
+	//（vault 已是 git 仓库但缺 .pinslip-repo 标记）时生效——用户显式确认后
+	// 创建标记并提交，完成接入。绝不落盘（saveSyncConfig 强制剥离），
+	// 否则服务重启会自动重放认领。
+	Adopt bool `json:"adopt,omitempty"`
 }
 
 // normalize 清洗输入、补默认值并做最小校验。
@@ -74,7 +79,9 @@ func loadSyncConfig(vaultDir string) (*SyncConfig, error) {
 
 // saveSyncConfig 写回同步配置（0600：含 token，仅本用户可读）。
 func saveSyncConfig(vaultDir string, cfg *SyncConfig) error {
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	persisted := *cfg
+	persisted.Adopt = false // 一次性标志不落盘（见 SyncConfig.Adopt 注释）
+	data, err := json.MarshalIndent(&persisted, "", "  ")
 	if err != nil {
 		return err
 	}

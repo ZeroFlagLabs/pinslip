@@ -3,7 +3,7 @@ import { createNoteWindow, NOTE_COLLAPSED_HEIGHT, setNoteWindowCollapsed } from 
 import { createQuickCaptureWindow } from './quick-capture';
 import { createMainWindow } from './main-window';
 import { GroupManager } from './group-manager';
-import { getOpenNotes, setOpenNotes } from '../settings';
+import { getOpenNotes, setOpenNotes, getAdvanced } from '../settings';
 import { IPC } from '../../shared/ipc-channels';
 import type { GroupState } from '../../shared/types';
 import type { GoProcess } from '../services/go-process';
@@ -49,11 +49,23 @@ export class WindowManager {
     // 已有笔记按持久化的 pin 恢复置顶状态；新便签默认置顶
     const alwaysOnTop = noteId ? await this.fetchPinState(noteId) : true;
 
+    // 落点选项「跟随主窗口」：仅全新便签（!noteId）且主窗口可见时传实时位置；
+    // 主窗口「关闭」是隐藏不是销毁，isVisible 门控挡住隐藏前的过期位置
+    const managerBounds =
+      !noteId &&
+      getAdvanced().notePlacement === 'beside-manager' &&
+      this.mainWindow &&
+      !this.mainWindow.isDestroyed() &&
+      this.mainWindow.isVisible()
+        ? this.mainWindow.getBounds()
+        : undefined;
+
     const win = createNoteWindow({
       noteId: id,
       index: this.noteWindows.size,
       alwaysOnTop,
       folder,
+      managerBounds,
       // 便签间磁铁/成组判定：实时取除自己外的其他置顶便签（仅置顶便签参与）。
       // 自己在组内 → 空池（组成员不触发磁铁/成组，v1 组不合并）；
       // 目标在组内 → 带 grouped 标记：退出磁铁层但保留 stack-zone
@@ -245,6 +257,13 @@ export class WindowManager {
     return [...this.noteWindows.keys()];
   }
 
+  /** 聚焦指定便签窗口：仅全局快捷键新建路径调用——
+   *  会话恢复/列表打开等其他建窗路径不抢焦点 */
+  focusNoteWindow(noteId: string): void {
+    const win = this.noteWindows.get(noteId);
+    if (win && !win.isDestroyed()) win.focus();
+  }
+
   /** 记录便签缩放起始几何（左缘缩放要锚定右缘，需记住起始 x+width）。 */
   beginNoteResize(noteId: string): void {
     const win = this.noteWindows.get(noteId);
@@ -305,9 +324,11 @@ export class WindowManager {
     }
     this.mainWindow = createMainWindow();
     // 关闭主窗口 = 隐藏到托盘（保留列表滚动/搜索状态，托盘秒开）；
-    // 应用真正退出时（quitting）放行关闭
+    // 应用真正退出时（quitting）放行关闭；
+    // 托盘关闭（高级定制）时没有「隐藏到托盘」的去处——同样放行真实关闭，
+    // 全部窗口关闭后由 window-all-closed 触发退出
     this.mainWindow.on('close', (e) => {
-      if (!this.quitting) {
+      if (!this.quitting && getAdvanced().trayIcon) {
         e.preventDefault();
         this.mainWindow?.hide();
       }
@@ -323,6 +344,19 @@ export class WindowManager {
       this.mainWindow.hide();
     } else {
       this.showMainWindow();
+    }
+  }
+
+  /** 运行中切换任务栏图标（高级定制 taskbarIcon 即改即生效）：
+   *  作用于全部窗口——主窗口与便签一起隐/显（onemast 原诉求：
+   *  便签开多了挤满任务栏）。主窗口可能尚未创建（null）——
+   *  建窗时各自按设置补齐 */
+  setAllWindowsSkipTaskbar(skip: boolean): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.setSkipTaskbar(skip);
+    }
+    for (const [, w] of this.noteWindows) {
+      if (!w.isDestroyed()) w.setSkipTaskbar(skip);
     }
   }
 

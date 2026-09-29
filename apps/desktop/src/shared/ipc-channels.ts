@@ -39,8 +39,16 @@ export const IPC = {
   SettingsGetLanguage: 'settings:get-language',
   /** 设置界面语言偏好，参数 lang（'system' 或 zh-CN/en/ja/ko/es/de/fr） */
   SettingsSetLanguage: 'settings:set-language',
+  /** 查询高级定制选项（整对象，缺省字段已补默认值） */
+  SettingsGetAdvanced: 'settings:get-advanced',
+  /** 按键部分更新高级定制选项，参数 patch（AdvancedSettings），返回补齐后的完整对象 */
+  SettingsSetAdvanced: 'settings:set-advanced',
+  /** 查询 OS 深色模式事实（nativeTheme.shouldUseDarkColors），managerTheme='system' 的渲染层合成用 */
+  SettingsGetOsDark: 'settings:get-os-dark',
   /** 界面语言切换广播（主进程→所有窗口）：参数为生效语言码，已开窗口即时跟进 */
   LanguageChanged: 'app:language-changed',
+  /** OS 深色模式变更广播（主进程→所有窗口）：参数为 shouldUseDarkColors 新值 */
+  OsThemeChanged: 'settings:os-theme-changed',
   /** 笔记数据变更（保存/删除/速记）：渲染进程→主进程→主窗口广播 */
   NotesChanged: 'notes:changed',
   /** 成组预告高亮（主进程→便签渲染层），参数 active: boolean */

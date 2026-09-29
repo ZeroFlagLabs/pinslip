@@ -4,10 +4,12 @@
 //	PUT    /api/sync/config  → 配置仓库/凭证/分支/开关，触发首次接入
 //	DELETE /api/sync/config  → 停用（保留 .git 与已存凭证）
 //	POST   /api/sync/now     → 立即 commit+pull+push
+//	POST   /api/sync/resolve → 分叉人工接管（{strategy:"local"|"remote"}）
 package gitsync
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 )
@@ -27,6 +29,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sync/config", h.putConfig)
 	mux.HandleFunc("DELETE /api/sync/config", h.deleteConfig)
 	mux.HandleFunc("POST /api/sync/now", h.syncNow)
+	mux.HandleFunc("POST /api/sync/resolve", h.resolve)
 }
 
 func (h *Handler) status(w http.ResponseWriter, _ *http.Request) {
@@ -62,6 +65,27 @@ func (h *Handler) syncNow(w http.ResponseWriter, _ *http.Request) {
 	if err := h.eng.SyncNow(); err != nil {
 		// 同步失败不丟 5xx：状态查询是常态路径，错误体现在 lastError 字段
 		log.Printf("[ERROR] git 手动同步失败: %v", err)
+	}
+	syncWriteJSON(w, http.StatusOK, h.eng.GetStatus())
+}
+
+// resolve 分叉人工接管：{strategy:"local"|"remote"}。
+// 前置校验失败（策略非法/非分叉状态/远端无 .pinslip-repo 标记）返回 400；
+// 执行失败不丢 5xx——错误按既有 codeOr 路径体现在状态的 lastError/lastErrorCode。
+func (h *Handler) resolve(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Strategy string `json:"strategy"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		syncWriteError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := h.eng.ResolveDivergence(in.Strategy); err != nil {
+		if errors.Is(err, errResolvePrecondition) {
+			syncWriteError(w, http.StatusBadRequest, err)
+			return
+		}
+		log.Printf("[ERROR] git 分叉接管失败: %v", err)
 	}
 	syncWriteJSON(w, http.StatusOK, h.eng.GetStatus())
 }

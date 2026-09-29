@@ -9,7 +9,10 @@ import (
 )
 
 // ExcerptMaxRunes 是摘要的最大字符数（超出截断并补省略号）。
-const ExcerptMaxRunes = 100
+// 取 240 兼顾两档列表预览：折叠态 line-clamp 3 行（≈60 字符）、
+// 展开态 line-clamp 10 行（≈200 字符），240 留有余量；MCP list_notes
+// 预览同源，长度仍有界。
+const ExcerptMaxRunes = 240
 
 var (
 	// 行首块级标记：标题 #、引用 >、无序/有序/任务列表、代码块围栏
@@ -22,12 +25,13 @@ var (
 	excerptEmph = regexp.MustCompile(`(\*\*|__|\*|_|~~|` + "`" + `)`)
 	// HTML 标签（剪藏内容可能带）
 	excerptHTML = regexp.MustCompile(`</?[a-zA-Z][^>]*>`)
-	// 空白压缩（含换行）
-	excerptSpace = regexp.MustCompile(`\s+`)
+	// 行内空白压缩（空格/制表符；保留换行——预览按行展示才有呼吸感）
+	excerptSpace = regexp.MustCompile(`[^\S\n]+`)
 )
 
-// MakeExcerpt 生成正文摘要：去 markdown 标记、图片仅留 alt、压缩空白，
-// 截断到 ExcerptMaxRunes（rune 安全）。正文为空返回 ""。
+// MakeExcerpt 生成正文摘要：去 markdown 标记、图片仅留 alt、压缩行内空白、
+// 保留换行（列表/段落结构在列表预览里可读），截断到 ExcerptMaxRunes（rune 安全）。
+// 正文为空返回 ""。
 func MakeExcerpt(body string) string {
 	var b strings.Builder
 	for _, raw := range strings.Split(body, "\n") {
@@ -51,7 +55,7 @@ func MakeExcerpt(body string) string {
 			continue
 		}
 		if b.Len() > 0 {
-			b.WriteByte(' ')
+			b.WriteByte('\n')
 		}
 		b.WriteString(line)
 		// 已超截断长度就不必再扫后面的行

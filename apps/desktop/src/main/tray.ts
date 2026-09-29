@@ -56,12 +56,21 @@ export function refreshTrayMenu(): void {
   trayRef.setContextMenu(contextMenu);
 }
 
-/** 创建系统托盘：左键切换主窗口，右键菜单管理便签。 */
+/** 创建系统托盘：左键切换主窗口，右键菜单管理便签。
+ *  幂等：已存在托盘时先销毁再建（高级定制关闭→重开、语言重建菜单等场景安全重入）。 */
 export function createTray(windowManager: WindowManager): Tray {
+  if (trayRef) destroyTray();
   trayRef = new Tray(loadTrayIcon());
   windowManagerRef = windowManager;
   refreshTrayMenu();
   trayRef.setToolTip('PinSlip');
   trayRef.on('click', () => windowManager.toggleMainWindow());
   return trayRef;
+}
+
+/** 销毁系统托盘并清空引用（高级定制关闭托盘图标时调用）；无托盘时 no-op。 */
+export function destroyTray(): void {
+  trayRef?.destroy();
+  trayRef = null;
+  windowManagerRef = null;
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, net, protocol } from 'electron';
+import { app, BrowserWindow, nativeTheme, net, protocol } from 'electron';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,15 +7,29 @@ import { GoProcess, VAULT_NOT_SET } from './services/go-process';
 import { registerIpcHandlers } from './ipc';
 import { createTray } from './tray';
 import { initAutoStart } from './autostart';
-import { getVaultPath } from './settings';
+import { getVaultPath, getAdvanced } from './settings';
 import { initMainI18n } from './i18n';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { startVaultWatch, stopVaultWatch } from './services/vault-watch';
 import { initAutoUpdater } from './updater';
+import { flushWindowState } from './windows/window-state';
+import { IPC } from '../shared/ipc-channels';
 
 // 只做装配：app 生命周期 + 各模块注册，业务逻辑分散到各模块
 const goProcess = new GoProcess();
 let windowManager: WindowManager;
+
+// 单实例锁：重复启动（任务栏固定图标/安装后自动运行 + 托盘常驻）时，
+// 第二实例直接退出并把已有实例的主窗口带到前台。
+// 没有这把锁时每个实例都会建托盘图标 + 在记忆的同一位置开主窗口，
+// 半透明面板下两个窗口叠成「文字重影」，难以察觉是多开了实例。
+// 未拿到锁时 app.quit()，whenReady 不会触发，后续注册全部无副作用。
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+app.on('second-instance', () => {
+  windowManager?.showMainWindow();
+});
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('app.pinslip');
@@ -46,8 +60,16 @@ app.whenReady().then(() => {
   });
 
   registerIpcHandlers({ windowManager, goProcess });
+  // OS 深色模式变更广播：managerTheme='system' 时渲染层即时跟进（复用语言广播模式）；
+  // main 只供事实，「system ? osDark : 偏好」的合成留在渲染层
+  nativeTheme.on('updated', () => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.OsThemeChanged, nativeTheme.shouldUseDarkColors);
+    }
+  });
   initMainI18n(); // 主进程 i18n（托盘/更新文案），须在 createTray 之前
-  createTray(windowManager);
+  // 托盘图标可在「高级定制」关闭：关闭时启动不创建托盘（运行中切换走 IPC 立即应用）
+  if (getAdvanced().trayIcon) createTray(windowManager);
   registerShortcuts(windowManager);
   initAutoStart(); // 打包后首次运行默认开启开机自启
   initAutoUpdater(); // 打包后启动 15s 静默检查更新（dev 短路）
@@ -68,15 +90,17 @@ app.whenReady().then(() => {
   });
 });
 
-// 托盘常驻应用：所有窗口关闭时不退出
+// 托盘常驻应用：托盘开启时所有窗口关闭不退出，由托盘菜单退出；
+// 托盘关闭（高级定制）时没有常驻入口，全部窗口关闭即退出（不做幽灵常驻）
 app.on('window-all-closed', () => {
-  // 保持运行，由托盘菜单退出
+  if (!getAdvanced().trayIcon) app.quit();
 });
 
 app.on('before-quit', () => {
   if (windowManager) windowManager.quitting = true; // 放行主窗口的 close 拦截，确保能真正退出
   unregisterShortcuts();
   stopVaultWatch();
+  flushWindowState(); // 窗口状态保存有 500ms 防抖，退出前立即落盘避免丢最后一笔
   goProcess.stop();
 });
 

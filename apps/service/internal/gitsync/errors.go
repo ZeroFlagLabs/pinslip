@@ -14,6 +14,8 @@ const (
 	CodeSyncURLRequired = "SYNC_URL_REQUIRED"
 	// vault 已是 git 仓库但不是 PinSlip 同步仓库（缺 .pinslip-repo 标记）
 	CodeSyncLocalNotPinslipRepo = "SYNC_LOCAL_NOT_PINSLIP_REPO"
+	// 同步文件夹（vault / .git / 标记文件）无读写权限（EACCES/EPERM）
+	CodeSyncLocalPermission = "SYNC_LOCAL_PERMISSION"
 	// 远端仓库不是 PinSlip 同步仓库（缺标记，防历史纠缠）
 	CodeSyncRemoteNotPinslipRepo = "SYNC_REMOTE_NOT_PINSLIP_REPO"
 	// 无法访问远端（地址/用户名/token/网络，go-git 不细分，归一类）

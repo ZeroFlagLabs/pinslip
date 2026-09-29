@@ -218,6 +218,11 @@ func TestSaveAttachment(t *testing.T) {
 		t.Fatalf("content mismatch: %v", data)
 	}
 
+	// 白名单外的扩展名拒绝(SVG 明确不收:可含脚本/外链的 XML)
+	if _, err := e.SaveAttachment(".svg", []byte("<svg/>")); err == nil {
+		t.Fatal("expected error for .svg")
+	}
+
 	// 白名单外的扩展名拒绝
 	if _, err := e.SaveAttachment(".exe", []byte{1}); err == nil {
 		t.Fatal("expected error for .exe")

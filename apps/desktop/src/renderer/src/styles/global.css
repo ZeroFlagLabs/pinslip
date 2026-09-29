@@ -142,6 +142,23 @@ button {
   box-shadow: var(--note-shadow-focus);
 }
 
+/* 文件管理器图片拖放：inset 高亮不改变卡片尺寸，且不会截获 drop 事件。 */
+.sticky-note.is-image-drag {
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--note-border) 65%, #2563eb),
+    var(--note-shadow-focus);
+}
+
+.sticky-note.is-image-drag::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: 20;
+  border: 2px dashed color-mix(in srgb, var(--note-border) 45%, #2563eb);
+  border-radius: calc(var(--note-radius) - 3px);
+  pointer-events: none;
+}
+
 /* ===== 便签组（CSS 拼框：无独立组框窗口） ===== */
 /* 成员保留自身圆角与完整四边描边（2026-07-21 评审：不去圆角、不拆边——
    方角拼板观感生硬，圆角卡片紧凑相叠更像一叠便利贴）；
@@ -333,6 +350,24 @@ input.sticky-note__groupname-input::placeholder {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 留在标题栏 drag 带内（随整栏拖窗）；改名入口是标题栏的铅笔图标按钮——
+     曾改为 no-drag 承载双击/右键，实测标题区基本拖不了窗，否决 */
+}
+
+/* 标题行内编辑框：原位替换标题文字（标题栏铅笔图标 →「重命名便签」进入，
+   Enter/blur 提交，Esc 取消）；样式对齐标题文字本身 */
+input.sticky-note__title-input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  color: #333;
+  outline: 1px solid rgba(0, 0, 0, 0.18);
+  -webkit-app-region: no-drag;
 }
 
 .sticky-note__state {
@@ -847,6 +882,38 @@ input.sticky-note__groupname-input::placeholder {
   user-select: none;
 }
 
+/* 同步状态按钮（仅配置 git 同步时渲染）：本地与 git 不一致（有未落盘修改/
+   待推送提交）=线框无底色深色;一致=便签主题色 ink 图标(内联注入,
+   与标签/文件夹按钮的两态逻辑一致);同步中=旋转;失败=错误图标+红 */
+.sticky-note__syncbtn.is-dirty {
+  color: #444;
+}
+.sticky-note__syncbtn.is-error {
+  color: #d32f2f;
+}
+.sticky-note__syncbtn.is-spinning svg {
+  animation: pinslip-spin 1s linear infinite;
+}
+@keyframes pinslip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 新建按钮的当前用色圆点（右上角）：与本便签同色时不渲染 */
+.sticky-note__createbtn {
+  position: relative;
+}
+.sticky-note__newdot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 /* ===== 卡片边缘缩放热区（透明，悬停光标提示） ===== */
 .sticky-note__edge {
   position: absolute;
@@ -969,6 +1036,16 @@ input.sticky-note__groupname-input::placeholder {
   transform: translateX(-50%);
   right: auto;
   bottom: auto;
+  -webkit-app-region: no-drag;
+}
+
+/* 标题菜单：标题栏下方左对齐（锚定标题前的下拉三角按钮，覆盖底部菜单定位）；
+   悬在标题栏 drag 带上，no-drag 必须加（同 menu--group 的热区教训） */
+.sticky-note__menu--title {
+  top: 34px;
+  bottom: auto;
+  left: 30px; /* 对齐下拉三角按钮（pin 按钮右侧） */
+  right: auto;
   -webkit-app-region: no-drag;
 }
 
@@ -1308,12 +1385,81 @@ input.sticky-note__groupname-input::placeholder {
 
 /* ===== 主窗口（main-view）：窄条便签列表面板，停靠右下角 ===== */
 .main-view {
+  /* ===== 管理器主题令牌（浅色 = 改动前硬编码值；dark 只覆盖取值，布局共享一份） ===== */
+  color-scheme: light;
+  --mv-bg: #f7f7f5; /* 面板底（主窗口/设置抽屉） */
+  --mv-card: #ffffff; /* 卡片底：设置卡/激活 tab/列表项默认/文件夹项 */
+  --mv-card-border: #eeeeee; /* 列表项默认描边（data-color 六色自行覆盖，不吃此令牌） */
+  --mv-hairline: rgba(0, 0, 0, 0.06); /* 卡片细描边（设置卡） */
+  --mv-pop-bg: #ffffff; /* 底部弹层（移动到…/删除确认）底 */
+  --mv-control-bg: #ffffff; /* 输入框/下拉/面板按钮底 */
+  --mv-control-fg: #333333; /* 输入框文字（原继承 body #333，显式化以便深色翻转） */
+  --mv-border: #e0e0e0; /* 控件描边 */
+  --mv-btn-hover-bg: #f5f5f5; /* 面板按钮 hover 底 */
+  --mv-btn-hover-border: #d0d0d0; /* 面板按钮 hover 描边 */
+  --mv-dir-border: #e8e4da; /* 文件夹列表项描边 */
+  --mv-rename-bg: #fffdf5; /* 行内重命名输入框底（暖白） */
+  --mv-toggle-off: #d8d8d5; /* 开关关闭态轨道 */
+  --mv-hover: rgba(0, 0, 0, 0.06); /* 图标按钮 hover 底 */
+  --mv-hover-soft: rgba(0, 0, 0, 0.05); /* tab 条底 / 弹层项 hover 底 */
+  --mv-soft-border: rgba(0, 0, 0, 0.1); /* 排序下拉/弹层筛选框描边 */
+  --mv-soft-border-strong: rgba(0, 0, 0, 0.24); /* 弹层筛选框 focus 描边 */
+  --mv-tab-active-shadow: rgba(0, 0, 0, 0.1); /* 激活 tab 浮起阴影 */
+  --mv-backdrop: rgba(0, 0, 0, 0.2); /* 设置抽屉遮罩 */
+  --mv-backdrop-soft: rgba(0, 0, 0, 0.12); /* 底部弹层遮罩 */
+  --mv-fg: #333333; /* 主文字（原继承 body） */
+  --mv-label: #444444; /* 设置项标签/弹层列表项文字 */
+  --mv-text: #555555; /* 按钮/下拉文字、hover 加深档 */
+  --mv-dir-title: #666655; /* 文件夹列表项标题（#665 展开） */
+  --mv-icon-hover: #666666; /* 图标按钮 hover 前景 */
+  --mv-weak: #777777; /* tab/排序按钮/引导页正文 */
+  --mv-soft: #888888; /* 小节标题/弹层标题 */
+  --mv-muted: #999999; /* 次级文字（时间/数值/弱图标） */
+  --mv-faint: #aaaaaa; /* 提示/空态文字 */
+  --mv-icon-weak: #bbbbbb; /* 弱图标（删除/移动/面包屑分隔符） */
   width: 100vw;
   height: 100vh;
   overflow-y: auto;
   padding: 12px 10px;
-  background: #f7f7f5;
+  background: var(--mv-bg);
+  color: var(--mv-fg);
   position: relative; /* 设置面板的定位上下文 */
+}
+
+/* 深色管理器：只改令牌取值（设计决策 1/3）。品牌黄强调色、列表卡片 data-color
+   六色、标签 chip 色、pin 红是内容/品牌属性，不在此覆盖——深色下照常显示 */
+.main-view[data-theme='dark'] {
+  color-scheme: dark; /* 原生下拉弹层/滚动条跟随深色 */
+  --mv-bg: #1e1e1e;
+  --mv-card: #2b2b2b;
+  --mv-card-border: #3a3a3a;
+  --mv-hairline: rgba(255, 255, 255, 0.08);
+  --mv-pop-bg: #333333;
+  --mv-control-bg: #333333;
+  --mv-control-fg: #dddddd;
+  --mv-border: #4a4a4a; /* #333 控件底上 #3a3a3a 描边太弱，提一档 */
+  --mv-btn-hover-bg: #3d3d3d;
+  --mv-btn-hover-border: #555555;
+  --mv-dir-border: #3a3a3a;
+  --mv-rename-bg: #35322c;
+  --mv-toggle-off: #4a4a4a;
+  --mv-hover: rgba(255, 255, 255, 0.08);
+  --mv-hover-soft: rgba(255, 255, 255, 0.07);
+  --mv-soft-border: rgba(255, 255, 255, 0.16);
+  --mv-soft-border-strong: rgba(255, 255, 255, 0.32);
+  --mv-tab-active-shadow: rgba(0, 0, 0, 0.45);
+  --mv-backdrop: rgba(0, 0, 0, 0.5);
+  --mv-backdrop-soft: rgba(0, 0, 0, 0.4);
+  --mv-fg: #e6e6e6;
+  --mv-label: #d9d9d9;
+  --mv-text: #c8c8c8;
+  --mv-dir-title: #b3ae9f;
+  --mv-icon-hover: #c0c0c0;
+  --mv-weak: #a0a0a0;
+  --mv-soft: #a0a0a0;
+  --mv-muted: #a0a0a0;
+  --mv-faint: #989898;
+  --mv-icon-weak: #909090;
 }
 
 /* ===== 设置抽屉（从下往上滑出，遮住主界面） ===== */
@@ -1321,7 +1467,7 @@ input.sticky-note__groupname-input::placeholder {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--mv-backdrop);
   border: none;
   cursor: default;
 }
@@ -1330,7 +1476,7 @@ input.sticky-note__groupname-input::placeholder {
   position: fixed;
   inset: 0;
   z-index: 41;
-  background: #f7f7f5;
+  background: var(--mv-bg);
   padding: 14px 12px;
   overflow-y: auto;
   animation: settings-drawer-up 0.18s ease;
@@ -1368,15 +1514,15 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #999;
+  color: var(--mv-muted);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .settings-drawer__close:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #666;
+  background: var(--mv-hover);
+  color: var(--mv-icon-hover);
 }
 
 .settings-drawer__close svg {
@@ -1386,8 +1532,8 @@ input.sticky-note__groupname-input::placeholder {
 
 /* 设置项白色卡片（行/按钮复用 settings-panel__* 样式） */
 .settings-card {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--mv-card);
+  border: 1px solid var(--mv-hairline);
   border-radius: 10px;
   padding: 10px 12px 12px;
 }
@@ -1399,13 +1545,32 @@ input.sticky-note__groupname-input::placeholder {
 
 .settings-panel__section {
   font-size: 11px;
-  color: #999;
+  color: var(--mv-muted);
   margin: 18px 0 8px;
 }
 
 /* 抽屉里第一个小节不加上边距，避免顶部悬空 */
 .settings-panel__section:first-child {
   margin-top: 0;
+}
+
+/* 「高级定制」折叠区头：与 section 同款灰字（视觉降级），整行可点击展开/收起 */
+.settings-panel__section--toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-panel__section--toggle svg {
+  width: 10px;
+  height: 10px;
+  flex: none;
 }
 
 .settings-panel__row {
@@ -1424,14 +1589,14 @@ input.sticky-note__groupname-input::placeholder {
 
 .settings-panel__label {
   font-size: 12px;
-  color: #444;
+  color: var(--mv-label);
   flex: none;
 }
 
 .settings-panel__value {
   flex: 1;
   font-size: 11px;
-  color: #999;
+  color: var(--mv-muted);
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
@@ -1445,7 +1610,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .settings-panel__hint {
   font-size: 11px;
-  color: #aaa;
+  color: var(--mv-faint);
   margin-top: 6px;
 }
 
@@ -1456,7 +1621,7 @@ input.sticky-note__groupname-input::placeholder {
   height: 20px;
   border: none;
   border-radius: 10px;
-  background: #d8d8d5;
+  background: var(--mv-toggle-off);
   position: relative;
   transition: background 0.15s ease;
   flex: none;
@@ -1498,19 +1663,19 @@ input.sticky-note__groupname-input::placeholder {
 
 .settings-panel__btn {
   padding: 5px 12px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mv-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--mv-control-bg);
   font-size: 12px;
-  color: #555;
+  color: var(--mv-text);
   white-space: normal; /* 允许按钮文案内部折行，不撑破面板 */
   line-height: 1.35;
   min-width: 0;
 }
 
 .settings-panel__btn:hover {
-  background: #f5f5f5;
-  border-color: #d0d0d0;
+  background: var(--mv-btn-hover-bg);
+  border-color: var(--mv-btn-hover-border);
 }
 
 /* 清空回收区的两阶段确认态 */
@@ -1531,19 +1696,19 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .settings-panel__btn:disabled:hover {
-  background: #fff;
-  border-color: #e0e0e0;
+  background: var(--mv-control-bg);
+  border-color: var(--mv-border);
 }
 
 /* 回收区保留天数的下拉选择（与行右侧对齐，风格同面板控件） */
 .settings-panel__select {
   margin-left: auto;
   padding: 3px 6px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mv-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--mv-control-bg);
   font-size: 12px;
-  color: #555;
+  color: var(--mv-text);
 }
 
 /* git 同步配置表单：标签列 + 文本输入（输入框风格同 settings-panel__select） */
@@ -1556,7 +1721,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .settings-panel__field-label {
   font-size: 12px;
-  color: #444;
+  color: var(--mv-label);
   flex: none;
   width: 56px;
 }
@@ -1565,11 +1730,11 @@ input.sticky-note__groupname-input::placeholder {
   flex: 1;
   min-width: 0;
   padding: 4px 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mv-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--mv-control-bg);
   font-size: 12px;
-  color: #555;
+  color: var(--mv-text);
   outline: none;
 }
 
@@ -1584,7 +1749,7 @@ input.sticky-note__groupname-input::placeholder {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #555;
+  color: var(--mv-text);
 }
 
 .settings-panel__input--number {
@@ -1633,15 +1798,15 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #999;
+  color: var(--mv-muted);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .main-view__settings:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #666;
+  background: var(--mv-hover);
+  color: var(--mv-icon-hover);
 }
 
 .main-view__settings svg {
@@ -1672,7 +1837,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .vault-setup__text {
   font-size: 12px;
-  color: #777;
+  color: var(--mv-weak);
   line-height: 1.7;
 }
 
@@ -1692,7 +1857,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .vault-setup__hint {
   font-size: 11px;
-  color: #aaa;
+  color: var(--mv-faint);
 }
 
 .main-view__hint {
@@ -1712,7 +1877,7 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__create:hover {
-  background: #ffca28;
+  filter: brightness(0.96); /* 按钮底色由内联样式注入（跟随上次用色），hover 只压暗 */
 }
 
 .main-view__create svg {
@@ -1723,11 +1888,12 @@ input.sticky-note__groupname-input::placeholder {
 .main-view__search input {
   width: 100%;
   padding: 7px 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mv-border);
   border-radius: 8px;
   font-size: 12px;
   outline: none;
-  background: #fff;
+  background: var(--mv-control-bg);
+  color: var(--mv-control-fg);
 }
 
 .main-view__search input:focus {
@@ -1749,7 +1915,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .main-view__section h2 {
   font-size: 12px;
-  color: #888;
+  color: var(--mv-soft);
   margin-bottom: 8px;
 }
 
@@ -1772,11 +1938,11 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__sort select {
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--mv-soft-border);
   border-radius: 5px;
-  background: #fff;
+  background: var(--mv-control-bg);
   font-size: 11px;
-  color: #555;
+  color: var(--mv-text);
   padding: 2px 4px;
   outline: none;
 }
@@ -1790,12 +1956,12 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: #777;
+  color: var(--mv-weak);
   cursor: pointer;
 }
 
 .main-view__sort button:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--mv-hover);
 }
 
 /* 标签视图组头：可点击收起/展开（caret + 文本） */
@@ -1809,7 +1975,7 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__grouphead:hover {
-  color: #555;
+  color: var(--mv-text);
 }
 
 .note-list {
@@ -1822,15 +1988,18 @@ input.sticky-note__groupname-input::placeholder {
 /* 卡片颜色：--card-* 变量由 data-color 主题覆盖，默认白 */
 .note-list li {
   position: relative;
-  padding: 9px 88px 9px 10px; /* 右侧留出 打开目录+移动+删除 三个按钮位 */
+  padding: 9px 88px 9px 10px; /* 右侧按钮位留白（预览区用负 margin 拉回全宽，见 .note-list__preview） */
   border-radius: 8px;
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--card-border, #eee);
+  background: var(--card-bg, var(--mv-card));
+  border: 1px solid var(--card-border, var(--mv-card-border));
   /* 标签 chip 默认琥珀（黄便签），各色块在 data-color 里覆盖 */
   --tag-bg: rgba(249, 168, 37, 0.22);
   --tag-ink: #8a6d1f;
   cursor: pointer;
 }
+
+/* 便签列表项的右侧 padding 与搜索项一致（88px 三按钮位）——第四个
+   「打开便签」按钮放右下角（.note-list__open-note），不加宽 padding */
 
 .note-list li:hover {
   border-color: var(--card-hover, #ffd54f);
@@ -1882,6 +2051,12 @@ input.sticky-note__groupname-input::placeholder {
   --tag-ink: #e65100;
 }
 
+/* 彩色卡片恒为浅色底（内容色不主题化，深色主题照常显示）：卡内文字保持深色，
+   不随管理器主题前景（--mv-fg）翻转。无 data-color 的项（搜索结果）才吃主题前景 */
+.note-list li[data-color] {
+  color: #333;
+}
+
 .note-list__title {
   display: flex;
   align-items: center;
@@ -1908,17 +2083,71 @@ input.sticky-note__groupname-input::placeholder {
   flex: none;
 }
 
+/* 标题文本：flex 容器里省略号必须落在自己的盒子（min-width:0 才会缩） */
+.note-list__title-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .note-list__snippet,
 .note-list__meta {
   display: block;
   font-size: 12px;
-  color: #999;
+  color: var(--mv-muted);
   /* 时间行整体不折行，超长（含文件夹标注）省略 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* 便签列表项：flex 列布局，meta（时间/字数）钉在内容区底部——
+   不随预览长短浮动（展开/收起时位置恒定）；
+   右侧留 70px 给底部按钮带，meta 与「复制全部/打开」同一行排开 */
+.note-list li.note-list__note {
+  display: flex;
+  flex-direction: column;
+}
+.note-list li.note-list__note .note-list__meta {
+  /* auto 吸收剩余空间实现钉底；padding-top 保底 10px 与上方内容的间距。
+   *  撤掉 nowrap/overflow/ellipsis 截断三件套——「时间·字数」很短，
+   *  正常窗口必然放得完；带文件夹标注的超长情况宁可换行也不藏字 */
+  margin-top: auto;
+  padding-top: 10px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* 摘要预览（excerpt 保留换行的纯文本，pre-wrap 按行展示）：
+   负 margin 伸进右侧按钮 padding 区拉回全宽（padding 是给右上角按钮
+   让位的，预览在标题行之下不受其影响）；默认 clamp 3 行 */
+.note-list__preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-right: -78px;
+  margin-bottom: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mv-muted);
+  white-space: pre-wrap;
+  /* body 全局 user-select:none，预览放开选择——选段复制与「复制全部」互补 */
+  user-select: text;
+}
+
+/* 展开态：不再 clamp，限高 10 行 + 内部滚动（超长摘要尾部可滚动查看，
+   条目高度整齐；滚轮悬停会被预览接管，超出最多一两行，代价可忽略） */
+.note-list__preview.is-expanded {
+  -webkit-line-clamp: unset;
+  display: block;
+  max-height: 168px; /* 12px × 1.4 × 10 行 */
+  overflow-y: auto;
+}
+
+/* 展开时卡片底部预留「打开便签」按钮带——按钮不再压预览最后一行 */
 /* 搜索结果标题：纯文本（无图标），回退块级——
    flex 会让高亮 <mark> 片段成独立 item（gap 错位、text-overflow 失效） */
 .note-list__title--plain {
@@ -1980,7 +2209,7 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #bbb;
+  color: var(--mv-icon-weak);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1998,7 +2227,7 @@ input.sticky-note__groupname-input::placeholder {
 
 /* 双类选择器：压过 .note-list li 的卡片 padding（右侧 88px 按钮位留白会让居中文字视觉偏左） */
 .note-list .note-list__empty {
-  color: #aaa;
+  color: var(--mv-faint);
   text-align: center;
   padding: 32px 10px;
   cursor: default !important;
@@ -2021,7 +2250,7 @@ input.sticky-note__groupname-input::placeholder {
   padding: 2px 2px;
   border-radius: 4px;
   font-size: 12px;
-  color: #999;
+  color: var(--mv-muted);
   cursor: pointer;
   /* 单段名超长时限宽省略，完整路径在 title 悬停显示 */
   max-width: 90px;
@@ -2031,11 +2260,11 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__crumb:hover {
-  color: #555;
+  color: var(--mv-text);
 }
 
 .main-view__crumb.is-here {
-  color: #333;
+  color: var(--mv-fg);
   font-weight: 600;
 }
 
@@ -2045,7 +2274,7 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__crumb-sep {
-  color: #bbb;
+  color: var(--mv-icon-weak);
   margin: 0 1px;
 }
 
@@ -2063,7 +2292,7 @@ input.sticky-note__groupname-input::placeholder {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  color: #999;
+  color: var(--mv-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2071,8 +2300,8 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__newfolder-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #555;
+  background: var(--mv-hover);
+  color: var(--mv-text);
 }
 
 .main-view__newfolder-btn svg {
@@ -2091,11 +2320,12 @@ input.sticky-note__groupname-input::placeholder {
   flex: 1;
   min-width: 0;
   padding: 6px 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mv-border);
   border-radius: 8px;
   font-size: 12px;
   outline: none;
-  background: #fff;
+  background: var(--mv-control-bg);
+  color: var(--mv-control-fg);
 }
 
 .main-view__newfolder-row input:focus {
@@ -2133,7 +2363,7 @@ input.sticky-note__groupname-input::placeholder {
   gap: 4px;
   margin-top: 10px;
   padding: 3px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--mv-hover-soft);
   border-radius: 9px;
 }
 
@@ -2148,7 +2378,7 @@ input.sticky-note__groupname-input::placeholder {
   background: transparent;
   padding: 5px 0;
   font-size: 12px;
-  color: #777;
+  color: var(--mv-weak);
   cursor: pointer;
 }
 
@@ -2158,14 +2388,14 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .main-view__tab:hover {
-  color: #555;
+  color: var(--mv-text);
 }
 
 .main-view__tab.is-active {
-  background: #fff;
-  color: #333;
+  background: var(--mv-card);
+  color: var(--mv-fg);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--mv-tab-active-shadow);
 }
 
 /* 归属与标签行：标签独占一行，flex 布局（子元素不再用 margin-left 挤位） */
@@ -2191,7 +2421,7 @@ input.sticky-note__groupname-input::placeholder {
   vertical-align: bottom;
   font-size: 10px;
   line-height: 15px;
-  color: #999;
+  color: var(--mv-muted);
 }
 
 .note-list__folder svg {
@@ -2202,8 +2432,8 @@ input.sticky-note__groupname-input::placeholder {
 
 /* 文件夹列表项 */
 .note-list li.note-list__dir {
-  background: #fff;
-  border-color: #e8e4da;
+  background: var(--mv-card);
+  border-color: var(--mv-dir-border);
   padding: 8px 62px 8px 10px; /* 右侧留出 重命名+删除 两个按钮位 */
 }
 
@@ -2220,7 +2450,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .note-list li.note-list__dir .note-list__title {
   margin-bottom: 0;
-  color: #665;
+  color: var(--mv-dir-title);
 }
 
 /* 文件夹项：重命名按钮（删除按钮左侧，与便签项 move 按钮同位） */
@@ -2233,7 +2463,7 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #999;
+  color: var(--mv-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2257,7 +2487,48 @@ input.sticky-note__groupname-input::placeholder {
   padding: 2px 6px;
   font-size: 13px;
   outline: none;
-  background: #fffdf5;
+  background: var(--mv-rename-bg);
+  color: var(--mv-control-fg);
+}
+
+/* 底部按钮带：右下角「打开便签」+ 其左侧「复制全部」（与其余三按钮的
+   右上角区分开）；底色+阴影保证压在展开预览上也可读 */
+.note-list__open-note,
+.note-list__copy-all {
+  position: absolute;
+  bottom: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  color: #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.note-list__open-note {
+  right: 8px;
+}
+.note-list__copy-all {
+  right: 38px;
+}
+
+.note-list__open-note svg,
+.note-list__copy-all svg {
+  width: 14px;
+  height: 14px;
+}
+
+.note-list__open-note:hover {
+  background: #e6f4ea;
+  color: #188038;
+}
+.note-list__copy-all:hover {
+  background: #e3f0fd;
+  color: #1565c0;
 }
 
 /* 打开所在目录按钮（移动按钮左侧） */
@@ -2270,7 +2541,7 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #bbb;
+  color: var(--mv-icon-weak);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2296,7 +2567,7 @@ input.sticky-note__groupname-input::placeholder {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #bbb;
+  color: var(--mv-icon-weak);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2316,7 +2587,7 @@ input.sticky-note__groupname-input::placeholder {
 .move-pop__backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--mv-backdrop-soft);
   border: none;
   z-index: 60;
 }
@@ -2329,7 +2600,7 @@ input.sticky-note__groupname-input::placeholder {
   max-height: 55%;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--mv-pop-bg);
   border-radius: 12px 12px 0 0;
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
   z-index: 61;
@@ -2349,7 +2620,7 @@ input.sticky-note__groupname-input::placeholder {
 
 .move-pop__title {
   font-size: 12px;
-  color: #888;
+  color: var(--mv-soft);
   padding: 12px 14px 8px;
   white-space: nowrap;
   overflow: hidden;
@@ -2368,16 +2639,16 @@ input.sticky-note__groupname-input::placeholder {
 .move-pop__filter {
   flex: none;
   margin: 0 8px 6px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--mv-soft-border);
   border-radius: 6px;
   padding: 5px 10px;
   font-size: 12px;
-  color: #444;
+  color: var(--mv-label);
   outline: none;
 }
 
 .move-pop__filter:focus {
-  border-color: rgba(0, 0, 0, 0.24);
+  border-color: var(--mv-soft-border-strong);
 }
 
 .move-pop__item {
@@ -2389,7 +2660,7 @@ input.sticky-note__groupname-input::placeholder {
   padding: 7px 10px;
   border-radius: 6px;
   font-size: 12px;
-  color: #444;
+  color: var(--mv-label);
   cursor: pointer;
   text-align: left;
 }
@@ -2402,7 +2673,7 @@ input.sticky-note__groupname-input::placeholder {
 }
 
 .move-pop__item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--mv-hover-soft);
 }
 
 /* 删除确认弹层：危险项（连同便签一起删除） */
@@ -2417,7 +2688,7 @@ input.sticky-note__groupname-input::placeholder {
 .move-pop__empty {
   padding: 12px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--mv-faint);
   text-align: center;
 }
 

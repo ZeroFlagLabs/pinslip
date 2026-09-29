@@ -1,6 +1,8 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, nativeImage } from 'electron';
+import path from 'node:path';
 import { loadView, viewWebPreferences } from './view-helper';
-import { clampRectToWorkArea, getWindowStateRaw, markCollapsed, trackWindowState } from './window-state';
+import { getAdvanced } from '../settings';
+import { clampRectToWorkArea, getWindowStateRaw, markCollapsed, NOTE_MIN_EXPANDED_HEIGHT, trackWindowState } from './window-state';
 import type { WinCal } from './window-state';
 import { attachEdgeSnap, latticeStep, NOTE_MARGIN } from './snap';
 import type { OtherNote, SnapHandle, SnapHooks } from './snap';
@@ -8,8 +10,6 @@ import { COLLAPSE_ANIM_MS } from '../../shared/anim';
 
 /** 折叠成标题条时的窗口高度（DIP）：标题栏 32 + 上下透明边距 16×2（阴影留白） */
 export const NOTE_COLLAPSED_HEIGHT = 64;
-/** 展开态最小高度（DIP，与 minHeight 一致）：expanded 记忆高度低于它即视为脏数据 */
-const NOTE_MIN_EXPANDED_HEIGHT = 160;
 /** 新建便签默认高度（构造单位）：展开恢复遇脏数据高度时的回退目标 */
 const NOTE_DEFAULT_HEIGHT = 420;
 
@@ -25,6 +25,10 @@ export interface NoteWindowOptions {
   getOthers?: () => OtherNote[]; // 其他便签窗口（便签间磁铁/成组判定用；组过滤由调用方做）
   snapHooks?: SnapHooks; // 成组手势回调（stack-zone 高亮预告 + 松手成组）
   folder?: string; // 新建便签的落盘文件夹（随路由 query 下发给渲染进程）
+  /** 主窗口实时位置（DIP）：仅「全新便签 + 落点选项跟随主窗口 + 主窗口可见」
+   *  时由 window-manager 传入；落点只喂构造参数（同为 DIP 同屏算术精确），
+   *  混合 DPI 残差由 calibrate 吸收，出屏由 clampRectToWorkArea 兜底 */
+  managerBounds?: Electron.Rectangle;
 }
 
 /** 取窗口的吸附句柄：便签组 restack 走 animateTo（复用落位动画的格点量化纪律） */
@@ -34,17 +38,26 @@ export function getNoteSnapHandle(win: BrowserWindow): SnapHandle | undefined {
 
 /** 创建便签窗口：无边框、透明；进任务栏（不置顶时也能找回）、可最小化；
  *  有位置记忆则恢复原位，否则错位摆放；置顶与否由用户选择 */
-export function createNoteWindow({ noteId, index, alwaysOnTop, getOthers, snapHooks, folder }: NoteWindowOptions): BrowserWindow {
+export function createNoteWindow({ noteId, index, alwaysOnTop, getOthers, snapHooks, folder, managerBounds }: NoteWindowOptions): BrowserWindow {
   const saved = getWindowStateRaw(`note:${noteId}`);
   // 期望的构造参数（恢复的记忆值或默认错位摆放）；
   // 折叠记忆的窗口：saved.height 即折叠高度，最小尺寸/可缩放同步收紧
   const collapsed = saved?.collapsed === true;
-  const ix = saved?.x ?? 120 + index * 30;
-  const iy = saved?.y ?? 120 + index * 30;
+  // 无位置记忆的全新便签且有主窗口位置（落点选项跟随主窗口）：
+  // 开在主窗口左侧 12px，垂直级联最多 6 层循环；否则固定起点级联
+  const beside = !saved && managerBounds;
+  const ix = saved?.x ?? (beside ? managerBounds.x - 320 - 12 : 120 + index * 30);
+  const iy = saved?.y ?? (beside ? managerBounds.y + 36 + (index % 6) * 28 : 120 + index * 30);
   const iw = saved?.width ?? 320;
-  const ih = saved?.height ?? (collapsed ? NOTE_COLLAPSED_HEIGHT : NOTE_DEFAULT_HEIGHT);
+  let ih = saved?.height ?? (collapsed ? NOTE_COLLAPSED_HEIGHT : NOTE_DEFAULT_HEIGHT);
+  // 恢复高度下限兜底:minHeight 只约束用户交互缩放,不拦构造参数——
+  // 任何来源的脏小高度(K 漂移/状态撕裂)都会被原样应用,且 (68,160) 区间
+  // 连渲染层自愈重放都救不回(被判为「已展开」no-op),必须在构造前拦住
+  if (!collapsed && ih < NOTE_MIN_EXPANDED_HEIGHT) ih = NOTE_DEFAULT_HEIGHT;
+  if (collapsed && ih < NOTE_COLLAPSED_HEIGHT) ih = NOTE_COLLAPSED_HEIGHT;
 
   const win = new BrowserWindow({
+    icon: nativeImage.createFromPath(path.join(__dirname, '../../../resources/icon.png')),
     x: ix,
     y: iy,
     width: iw,
@@ -54,7 +67,7 @@ export function createNoteWindow({ noteId, index, alwaysOnTop, getOthers, snapHo
     frame: false,
     transparent: true,
     alwaysOnTop,
-    skipTaskbar: false, // 所有便签都进任务栏，便于找回
+    skipTaskbar: !getAdvanced().taskbarIcon, // 缺省进任务栏便于找回；高级定制关闭任务栏图标时便签同免（用户显式选择）
     title: '新便签', // 渲染进程加载后会用便签标题覆盖
     resizable: !collapsed,
     minimizable: true,
@@ -212,8 +225,10 @@ export function setNoteWindowCollapsed(
     winCommitTimers.set(win.id, timer);
     // 关闭时的 timer 清理由建窗时统一注册的 closed 监听兜底，此处不再注册
   } else {
-    // 已是展开态：no-op（渲染层加载时无条件重放 collapsed，命中这里即状态一致）
-    if (!isCollapsedNow) return;
+    // 已是展开态:几何正常(≥展开最小高)才 no-op——正常展开窗口受 minHeight
+    // 约束必然 ≥160;(68,160] 死区高度是脏数据恢复出来的,继续走展开流程矫正
+    // (渲染层加载时无条件重放 collapsed,命中这里即状态一致)
+    if (!isCollapsedNow && dip.height >= NOTE_MIN_EXPANDED_HEIGHT) return;
     // 位置/宽度不动（折叠只压高度），高度用构造单位（≈物理）直接量化。
     // 高度下限判定：历史脏数据可能把 expanded 记成不合常理的小值
     // （< 展开态最小高度，正常交互到不了），视为损坏，回退新建便签默认高度

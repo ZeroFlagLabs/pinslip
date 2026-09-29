@@ -1,17 +1,18 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { IPC } from '../../shared/ipc-channels';
-import type { RuntimeInfo } from '../../shared/types';
+import type { AdvancedSettings, RuntimeInfo } from '../../shared/types';
 import type { WindowManager } from '../windows/window-manager';
 import type { GoProcess } from '../services/go-process';
-import { getVaultPath, setVaultPath, getLanguage, setLanguage } from '../settings';
+import { getVaultPath, setVaultPath, getLanguage, setLanguage, getAdvanced, setAdvanced } from '../settings';
 import { getAutoStart, setAutoStart } from '../autostart';
-import { setMainLanguage } from '../i18n';
-import { refreshTrayMenu } from '../tray';
+import { setMainLanguage, tMain } from '../i18n';
+import { createTray, destroyTray, refreshTrayMenu } from '../tray';
 import { resolveSystemLanguage } from '../../shared/languages';
 import { startVaultWatch } from '../services/vault-watch';
 import { checkForUpdate, getUpdateState, quitAndInstall } from '../updater';
+import { rebindBlankNoteShortcut } from '../shortcuts';
 
 interface IpcContext {
   windowManager: WindowManager;
@@ -107,8 +108,10 @@ export function registerIpcHandlers({ windowManager, goProcess }: IpcContext): v
   // 选择保险库：系统目录选择框 → 保存设置 → 关闭便签窗口 → 按新目录重启 Go 服务
   ipcMain.handle(IPC.SettingsChooseVault, async () => {
     const res = await dialog.showOpenDialog({
-      title: '选择便签存储位置',
-      buttonLabel: '选择此文件夹',
+      // 文案走主进程 i18n（跟随界面语言，默认跟随系统）：buttonLabel 会覆盖
+      // 系统对话框的确认按钮，硬编码中文会让外文系统用户看到「确定/选择此文件夹」
+      title: tMain('dialog.chooseVaultTitle'),
+      buttonLabel: tMain('dialog.chooseVaultButton'),
       defaultPath: getVaultPath() ?? path.join(app.getPath('documents'), 'PinSlip'),
       properties: ['openDirectory', 'createDirectory'],
     });
@@ -150,10 +153,11 @@ export function registerIpcHandlers({ windowManager, goProcess }: IpcContext): v
     if (!vault) return;
     const notesDir = path.join(vault, 'notes');
     const rel = String(folder ?? '');
-    if (rel.split('/').some((seg) => seg === '..' || seg === '')) return;
+    if (rel !== '' && rel.split('/').some((seg) => seg === '..' || seg === '')) return;
     const target = path.resolve(notesDir, rel);
     if (target !== notesDir && !target.startsWith(notesDir + path.sep)) return;
-    await shell.openPath(existsSync(target) ? target : notesDir);
+    const openError = await shell.openPath(existsSync(target) ? target : notesDir);
+    if (openError) console.error('[open-folder] shell.openPath failed:', openError);
   });
 
   // 开机自启：仅打包环境真实读写（dev 下 get 恒 false / set 为 no-op，见 autostart.ts）
@@ -177,6 +181,33 @@ export function registerIpcHandlers({ windowManager, goProcess }: IpcContext): v
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.LanguageChanged, effective);
     }
+  });
+
+  // OS 深色模式事实：managerTheme='system' 时渲染层合成生效主题的输入之一
+  ipcMain.handle(IPC.SettingsGetOsDark, () => nativeTheme.shouldUseDarkColors);
+
+  // 高级定制：整对象读取（缺省已补）；按键部分更新。trayIcon 变化立即
+  // 应用（销毁/重建托盘），taskbarIcon 变化立即应用（主窗口 setSkipTaskbar，
+  // 窗口未创建时由建窗读取补齐），blankNoteShortcut 变化原子重绑全局快捷键
+  // （重绑失败抛错回渲染层，设置不持久化、旧绑定不丢），其余字段持久化即生效，
+  // 返回补齐后的完整对象
+  ipcMain.handle(IPC.SettingsGetAdvanced, () => getAdvanced());
+  ipcMain.handle(IPC.SettingsSetAdvanced, (_event, patch: AdvancedSettings) => {
+    const before = getAdvanced();
+    // 空白便签快捷键：原子重绑先行——新键注册失败则整体不生效（不持久化、不丢旧绑定）
+    if (patch.blankNoteShortcut !== undefined && patch.blankNoteShortcut !== before.blankNoteShortcut) {
+      rebindBlankNoteShortcut(patch.blankNoteShortcut);
+    }
+    setAdvanced(patch);
+    const after = getAdvanced();
+    if (before.trayIcon !== after.trayIcon) {
+      if (after.trayIcon) createTray(windowManager);
+      else destroyTray();
+    }
+    if (before.taskbarIcon !== after.taskbarIcon) {
+      windowManager.setAllWindowsSkipTaskbar(!after.taskbarIcon);
+    }
+    return after;
   });
 
   // 笔记变更广播：任一渲染进程上报 → 转发主窗口刷新列表

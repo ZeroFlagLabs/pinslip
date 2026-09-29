@@ -1,4 +1,4 @@
-import { attachmentsApi } from '../../api/attachments';
+import { attachmentsApi, SUPPORTED_IMAGE_MIME_TYPES } from '../../api/attachments';
 
 /**
  * 编辑器图片支持（粘贴上传 + 相对路径显示）：
@@ -36,8 +36,11 @@ export function resolveImageSrc(src: string): string {
  *  view 用 any：editorViewOptionsCtx 是无类型 slice，仅为类型引入 prosemirror 依赖不值当 */
 export function handleImagePaste(folder = '') {
   return (view: any, event: ClipboardEvent): boolean => {
+    // 与拖拽/上传同一白名单口径(原先 startsWith('image/') 宽进严出,
+    // 三处过滤语义会漂移);多图同样逐张插入,不用 replaceSelectionWith
+    // (会把选区设为刚插入的 atom 节点,后一张覆盖前一张)
     const files = Array.from(event.clipboardData?.files ?? []).filter((f) =>
-      f.type.startsWith('image/'),
+      SUPPORTED_IMAGE_MIME_TYPES.has(f.type),
     );
     if (files.length === 0) return false;
     event.preventDefault();
@@ -48,7 +51,9 @@ export function handleImagePaste(folder = '') {
         const imageNode = view.state.schema.nodes.image.create({
           src: toMarkdownImageSrc(res.path, folder), // 相对笔记文件的路径，外部查看器可解析
         });
-        view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
+        const tr = view.state.tr;
+        if (!tr.selection.empty) tr.deleteSelection();
+        view.dispatch(tr.insert(tr.selection.to, imageNode));
       }
     })();
     return true;
