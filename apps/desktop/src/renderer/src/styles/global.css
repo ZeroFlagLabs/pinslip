@@ -1424,6 +1424,118 @@ input.sticky-note__title-input {
   color: #1e88e5;
 }
 
+/* ===== GFM 表格：边框/底纹全部半透明黑系——六色卡片上都成立，不做斑马纹 ===== */
+/* 表格操作条（table-bar.tsx）的定位锚 */
+.pinslip-editor {
+  position: relative;
+}
+
+.pinslip-editor .ProseMirror table {
+  /* separate + spacing 0：collapse 下 border-radius 不裁剪单元格边框 */
+  border-collapse: separate;
+  border-spacing: 0;
+  /* columnResizing 写入的 col 宽度要 fixed 布局才生效；窄窗下表格撑满正文宽 */
+  table-layout: fixed;
+  width: 100%;
+  margin: 6px 0;
+  font-size: inherit;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+}
+
+.pinslip-editor .ProseMirror th,
+.pinslip-editor .ProseMirror td {
+  padding: 6px 8px;
+  border-right: 1px solid rgba(0, 0, 0, 0.18);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  /* selectedCell 高亮伪元素的定位锚 */
+  position: relative;
+}
+
+.pinslip-editor .ProseMirror th:last-child,
+.pinslip-editor .ProseMirror td:last-child {
+  border-right: none;
+}
+
+.pinslip-editor .ProseMirror tr:last-child td {
+  border-bottom: none;
+}
+
+.pinslip-editor .ProseMirror th {
+  background: rgba(0, 0, 0, 0.09);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* 外圆角 6px 减去 1px 边框：角上的单元格底纹会戳出圆角，补内圆角 */
+.pinslip-editor .ProseMirror tr:first-child th:first-child {
+  border-top-left-radius: 5px;
+}
+.pinslip-editor .ProseMirror tr:first-child th:last-child {
+  border-top-right-radius: 5px;
+}
+.pinslip-editor .ProseMirror tr:last-child td:first-child {
+  border-bottom-left-radius: 5px;
+}
+.pinslip-editor .ProseMirror tr:last-child td:last-child {
+  border-bottom-right-radius: 5px;
+}
+
+/* 单元格多选（CellSelection）高亮：伪元素罩层，不动单元格自身底色 */
+.pinslip-editor .ProseMirror .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+}
+
+/* 列宽拖拽指示器（columnResizing 拖动期间出现）：2px 竖线压右侧边框中缝。
+   pointer-events:none 与官方样式一致——拖拽由单元格边缘命中发起，handle 纯视觉 */
+.pinslip-editor .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+/* ===== 表格操作条：选区进入表格时浮现在表格块上方（findbar 同款浮层纪律） ===== */
+.pinslip-editor__tablebar {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+
+.pinslip-editor__tablebar .sticky-note__btn {
+  color: #555;
+}
+
+.pinslip-editor__tablebar-divider {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 0 2px;
+}
+
+/* 删表确认态（再点一次生效，不弹窗） */
+.pinslip-editor__tablebar .sticky-note__btn.is-danger {
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.12);
+}
+
 /* ===== 速记浮窗（quick-capture） ===== */
 .quick-capture {
   /* 同样留透明边距，让阴影充分衰减、不被窗口裁切 */

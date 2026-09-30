@@ -106,6 +106,17 @@
       "replacePlaceholder": "置換後…",
       "noResult": "一致なし"
     },
+    "table": {
+      "insert": "表を挿入",
+      "addRowAfter": "下に行を挿入",
+      "addRowBefore": "上に行を挿入",
+      "addColAfter": "右に列を挿入",
+      "addColBefore": "左に列を挿入",
+      "deleteRow": "行を削除",
+      "deleteCol": "列を削除",
+      "deleteTable": "表を削除",
+      "deleteTableConfirm": "表全体を削除しますか？"
+    },
     "zoomOut": "縮小（現在 {{pct}}%）",
     "zoomIn": "拡大（現在 {{pct}}%）",
     "zoomOutLimit": "最小倍率です（50%）",

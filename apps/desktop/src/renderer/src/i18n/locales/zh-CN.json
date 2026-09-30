@@ -106,6 +106,17 @@
       "replacePlaceholder": "替换为…",
       "noResult": "无匹配"
     },
+    "table": {
+      "insert": "插入表格",
+      "addRowAfter": "下方插入行",
+      "addRowBefore": "上方插入行",
+      "addColAfter": "右侧插入列",
+      "addColBefore": "左侧插入列",
+      "deleteRow": "删除当前行",
+      "deleteCol": "删除当前列",
+      "deleteTable": "删除表格",
+      "deleteTableConfirm": "确认删除整个表格？"
+    },
     "zoomOut": "缩小（当前 {{pct}}%）",
     "zoomIn": "放大（当前 {{pct}}%）",
     "zoomOutLimit": "已是最小缩放（50%）",

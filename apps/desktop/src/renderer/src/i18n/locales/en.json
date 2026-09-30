@@ -106,6 +106,17 @@
       "replacePlaceholder": "Replace with…",
       "noResult": "No matches"
     },
+    "table": {
+      "insert": "Insert table",
+      "addRowAfter": "Insert row below",
+      "addRowBefore": "Insert row above",
+      "addColAfter": "Insert column right",
+      "addColBefore": "Insert column left",
+      "deleteRow": "Delete row",
+      "deleteCol": "Delete column",
+      "deleteTable": "Delete table",
+      "deleteTableConfirm": "Delete the entire table?"
+    },
     "zoomOut": "Zoom out (now {{pct}}%)",
     "zoomIn": "Zoom in (now {{pct}}%)",
     "zoomOutLimit": "Already at minimum zoom (50%)",

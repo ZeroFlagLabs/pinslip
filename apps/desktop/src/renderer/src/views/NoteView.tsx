@@ -25,10 +25,11 @@ import MagnifyingGlassMinusIcon from '~icons/ph/magnifying-glass-minus';
 import MagnifyingGlassPlusIcon from '~icons/ph/magnifying-glass-plus';
 import CopyIcon from '~icons/ph/copy';
 import CheckIcon from '~icons/ph/check';
-import ExportIcon from '~icons/ph/export';
+import ExportIcon from '~icons/ph/aperture';
 import FloppyDiskIcon from '~icons/ph/floppy-disk';
 import ArrowsClockwiseIcon from '~icons/ph/arrows-clockwise';
 import WarningCircleFillIcon from '~icons/ph/warning-circle-fill';
+import TableIcon from '~icons/ph/table';
 import PencilSimpleIcon from '~icons/ph/pencil-simple';
 import ArrowCounterClockwiseIcon from '~icons/ph/arrow-counter-clockwise';
 import PinIcon from '../components/icons/PinIcon';
@@ -71,6 +72,18 @@ function deriveTitle(markdown: string): string {
     // 否则冲突便签窗口标题会显示成标记符）
     if (line.startsWith('<<<<<<<') || line.startsWith('=======') || line.startsWith('>>>>>>>')) {
       continue;
+    }
+    // 表格行：按 | 拆单元格，空单元格的 <br/> 占位与分隔线单元格（---/:--:）
+    // 剥掉，其余文本空格连接；纯管道行产出空 → 跳过。空表格不至于把标题
+    // 污染成 "| <br /> | <br /> |"（与服务端 deriveTitle 同规则）
+    if (line.startsWith('|')) {
+      line = line
+        .split('|')
+        .map((c) => c.trim().replace(/^<br\s*\/?>$/i, '').trim())
+        .filter((c) => c !== '' && !/^[-: ]+$/.test(c))
+        .join(' ')
+        .trim();
+      if (!line) continue;
     }
     // 块级前缀：循环剥（叠加前缀如 "> ## "）
     while (BLOCK_PREFIX.test(line)) {
@@ -867,16 +880,17 @@ export default function NoteView() {
     [noteId],
   );
 
-  /** 进入标题行内编辑（标题栏铅笔图标 → 菜单「重命名便签」）；
-   *  未落盘的新便签没有可命名的文件，不开放入口 */
+  /** 进入标题行内编辑（标题栏铅笔图标 → 菜单「重命名便签」）。
+   *  未落盘的新便签也开放：提交时 upsert 直接建档（见 commitTitleRename）——
+   *  「先起名再写内容」是直觉操作，禁用入口反直觉 */
   const startTitleRename = useCallback(() => {
     setTitleMenuOpen(false);
-    if (!existsRef.current) return;
     setTitleRenaming(true);
   }, []);
 
   /** 标题行内编辑提交（Enter/blur）：客户端清洗文件系统非法字符
-   *  （30 字截断由服务端统一）；Esc 置取消标记后 blur 走同一出口 */
+   *  （30 字截断由服务端统一）；Esc 置取消标记后 blur 走同一出口。
+   *  新便签首次命名即落盘（PUT 幂等 upsert 部分更新，正文为空也建档） */
   const commitTitleRename = useCallback(
     (raw: string) => {
       setTitleRenaming(false);
@@ -889,6 +903,7 @@ export default function NoteView() {
       notesApi
         .save(noteId, { title: v, titleManual: true })
         .then((note) => {
+          existsRef.current = true; // upsert 已建档，后续内容保存走常规路径
           setTitle(note.title);
           setTitleManual(note.titleManual ?? true);
           window.api.notifyNotesChanged(); // 广播：主界面列表近实时刷新
@@ -991,6 +1006,14 @@ export default function NoteView() {
       icon: <MagnifyingGlassMinusIcon />,
       act: () => stepZoom(-ZOOM_STEP),
       disabled: zoomPct <= ZOOM_MIN,
+    },
+    {
+      // 插入表格(后续按钮可定制前先进编辑区):宽度收敛时倒数第二藏
+      key: 'table',
+      tip: t('note.table.insert'),
+      icon: <TableIcon />,
+      act: () => editorRef.current?.insertTable(),
+      disabled: false,
     },
     {
       // 导出为图片放编辑区末尾:宽度收敛时最先被藏(hiddenEdit≥1),
@@ -1112,16 +1135,14 @@ export default function NoteView() {
         >
           <PinIcon />
         </button>
-        {/* 重命名入口：标题前的实心下拉三角，点击弹标题菜单（重命名/恢复自动标题）；
-            未落盘新便签没有可命名的文件，禁用 */}
+        {/* 重命名入口：标题前的实心下拉三角，点击弹标题菜单（重命名/恢复自动标题）。
+            新便签同样开放——提交命名时 upsert 直接建档（先起名再写内容是直觉操作） */}
         {!collapsed && (
           <button
             className="sticky-note__btn"
             data-tip={t('note.renameNote')}
             aria-label={t('note.renameNote')}
-            disabled={!existsRef.current}
             onClick={() => {
-              if (!existsRef.current) return;
               setPaletteOpen(false);
               setMenuOpen(false);
               setNewMenuOpen(false);
@@ -1651,7 +1672,7 @@ export default function NoteView() {
       )}
 
       {/* ⋯ 菜单（被优先级收起的按钮在这里找回：编辑区从尾部藏起，
-          hiddenEdit≥1 藏导出、≥2 藏 A−、≥3 连 A＋ 一起藏） */}
+          hiddenEdit≥1 藏导出、≥2 藏表格、≥3 藏 A−） */}
       {menuOpen && (
         <div className="sticky-note__menu">
           {hiddenEdit >= 1 && (
@@ -1674,17 +1695,19 @@ export default function NoteView() {
               </button>
             </>
           )}
-          {hiddenEdit >= 3 && (
+          {hiddenEdit >= 2 && (
             <button
               className="sticky-note__menu-item"
-              disabled={zoomPct >= ZOOM_MAX}
-              onClick={() => stepZoom(ZOOM_STEP)}
+              onClick={() => {
+                setMenuOpen(false);
+                editorRef.current?.insertTable();
+              }}
             >
-              <MagnifyingGlassPlusIcon />
-              {zoomInTip}
+              <TableIcon />
+              {t('note.table.insert')}
             </button>
           )}
-          {hiddenEdit >= 2 && (
+          {hiddenEdit >= 3 && (
             <button
               className="sticky-note__menu-item"
               disabled={zoomPct <= ZOOM_MIN}

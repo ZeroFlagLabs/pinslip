@@ -15,7 +15,7 @@ import {
   toggleStrongCommand,
   wrapInBulletListCommand,
 } from '@milkdown/preset-commonmark';
-import { gfm, toggleStrikethroughCommand } from '@milkdown/preset-gfm';
+import { gfm, insertTableCommand, toggleStrikethroughCommand } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { nord } from '@milkdown/theme-nord';
@@ -35,6 +35,9 @@ import {
 type PmSearchCommand = typeof pmFindNext;
 import { createTaskCapableListItemView } from './task-item-view';
 import { createImageView, handleImagePaste } from './image-support';
+import { fragmentToPlainText } from './doc-plain-text';
+import type { FragmentLike } from './doc-plain-text';
+import TableBar from './table-bar';
 
 /** prosemirror-search 官方插件（命中装饰 + find/replace 命令）：
  *  $prose 包装成 Milkdown 插件挂链，与 nodeViewCtx 直注同层机制，不动现有插件结构 */
@@ -53,10 +56,7 @@ export interface EditorProps {
 
 /** clipboardTextSerializer 参数的最小结构类型（避免仅为类型引入 prosemirror 值依赖） */
 interface ClipboardSliceLike {
-  content: {
-    size: number;
-    textBetween(from: number, to: number, blockSeparator?: string): string;
-  };
+  content: FragmentLike;
 }
 
 /** 搜索状态快照：total = 命中总数；active = 当前命中序号（1 起；0 = 无当前命中） */
@@ -112,6 +112,8 @@ export interface EditorHandle {
   /** 任务列表切换：非列表 → 包成无序列表并转为任务项；
    *  普通列表 → 选区内列表项转任务项；全为任务项 → 转回普通列表 */
   toggleTaskList(): void;
+  /** 在光标处插入表格（默认 3 列 2 行含表头，行列数随后用表格操作条调整） */
+  insertTable(): void;
   /** 在当前光标或给定视口坐标处插入图片节点。坐标不在编辑器内时追加到正文末尾。 */
   insertImages(
     images: { src: string; alt?: string }[],
@@ -235,6 +237,13 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
           view.dispatch(tr);
         });
       },
+      insertTable() {
+        if (loading) return;
+        getEditor().action((ctx) => {
+          // 3 列 2 行（首行为表头），行/列数之后用表格操作条增删
+          ctx.get(commandsCtx).call(insertTableCommand.key, { row: 2, col: 3 });
+        });
+      },
       insertImages(images, at) {
         if (loading || images.length === 0) return;
         getEditor().action((ctx) => {
@@ -298,9 +307,9 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
         let text = '';
         getEditor().action((ctx) => {
           const view = ctx.get(editorViewCtx);
-          // 与 clipboardTextSerializer 同一约定：块间单换行；
-          // 不传 leafText，hardbreak 仍为 \n、image 跳过
-          text = view.state.doc.textBetween(0, view.state.doc.content.size, '\n');
+          // 与 clipboardTextSerializer 共用同一序列化器：按块结构重建纯文本，
+          // 列表标记（有序序号/无序 -/任务框）不丢
+          text = fragmentToPlainText(view.state.doc);
         });
         return text;
       },
@@ -405,7 +414,7 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
           },
           handlePaste: handleImagePaste(folder),
           clipboardTextSerializer: (slice: ClipboardSliceLike) =>
-            slice.content.textBetween(0, slice.content.size, '\n'),
+            fragmentToPlainText(slice.content),
         }));
         ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, _prev) => {
           onChange(markdown);
@@ -427,6 +436,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(props, ref)
     <div className={`pinslip-editor pinslip-editor--${props.mode ?? 'sticky'}`}>
       <MilkdownProvider>
         <MilkdownEditor {...props} ref={ref} />
+        {/* 表格操作条：选区进入表格时浮现（自身经 useInstance 订阅选区） */}
+        <TableBar />
       </MilkdownProvider>
     </div>
   );

@@ -339,6 +339,12 @@ var titleBlockPrefix = regexp.MustCompile(
 // 整行链接/图片：[t](url) / ![alt](src) → 取 t / alt
 var titleLinkOnly = regexp.MustCompile(`^!?\[([^\]]*)\]\([^)]*\)$`)
 
+// 表格行单元格清洗（与 renderer deriveTitle 同规则）：空单元格的 <br/> 占位
+var titleCellBr = regexp.MustCompile(`(?i)^<br\s*/?>$`)
+
+// 表格分隔线单元格（--- / :---: 形态）
+var titleTableSep = regexp.MustCompile(`^[-: ]+$`)
+
 // 整行行内包装可剥的最外层标记：两字符在前，保证 ** 优先于 * 匹配
 // （顺序与 renderer INLINE_WRAPS 一致）
 var titleInlineWraps = []string{"**", "__", "~~", "*", "_", "`"}
@@ -356,6 +362,24 @@ func deriveTitle(content string) string {
 		if strings.HasPrefix(line, "<<<<<<<") || strings.HasPrefix(line, "=======") ||
 			strings.HasPrefix(line, ">>>>>>>") {
 			continue
+		}
+		// 表格行：按 | 拆单元格，剥空单元格的 <br/> 占位与分隔线单元格，
+		// 其余文本空格连接；纯管道行产出空 → 跳过（否则空表格把标题污染成
+		// "| <br /> | <br /> |"，与 renderer deriveTitle 同规则）
+		if strings.HasPrefix(line, "|") {
+			cells := strings.Split(line, "|")
+			kept := make([]string, 0, len(cells))
+			for _, c := range cells {
+				c = strings.TrimSpace(c)
+				if c == "" || titleCellBr.MatchString(c) || titleTableSep.MatchString(c) {
+					continue
+				}
+				kept = append(kept, c)
+			}
+			line = strings.Join(kept, " ")
+			if line == "" {
+				continue
+			}
 		}
 		// 块级前缀：循环剥（叠加前缀如 "> ## "）
 		for titleBlockPrefix.MatchString(line) {

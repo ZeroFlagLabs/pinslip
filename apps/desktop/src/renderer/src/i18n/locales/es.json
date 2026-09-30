@@ -103,6 +103,17 @@
       "replacePlaceholder": "Reemplazar con…",
       "noResult": "Sin coincidencias"
     },
+    "table": {
+      "insert": "Insertar tabla",
+      "addRowAfter": "Insertar fila debajo",
+      "addRowBefore": "Insertar fila encima",
+      "addColAfter": "Insertar columna a la derecha",
+      "addColBefore": "Insertar columna a la izquierda",
+      "deleteRow": "Eliminar fila",
+      "deleteCol": "Eliminar columna",
+      "deleteTable": "Eliminar tabla",
+      "deleteTableConfirm": "¿Eliminar toda la tabla?"
+    },
     "zoomOut": "Reducir (ahora {{pct}}%)",
     "zoomIn": "Ampliar (ahora {{pct}}%)",
     "zoomOutLimit": "Ya está en el zoom mínimo (50%)",

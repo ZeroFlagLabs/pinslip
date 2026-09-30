@@ -103,6 +103,17 @@
       "replacePlaceholder": "Ersetzen durch…",
       "noResult": "Keine Treffer"
     },
+    "table": {
+      "insert": "Tabelle einfügen",
+      "addRowAfter": "Zeile darunter einfügen",
+      "addRowBefore": "Zeile darüber einfügen",
+      "addColAfter": "Spalte rechts einfügen",
+      "addColBefore": "Spalte links einfügen",
+      "deleteRow": "Zeile löschen",
+      "deleteCol": "Spalte löschen",
+      "deleteTable": "Tabelle löschen",
+      "deleteTableConfirm": "Gesamte Tabelle löschen?"
+    },
     "zoomOut": "Verkleinern (aktuell {{pct}} %)",
     "zoomIn": "Vergrößern (aktuell {{pct}} %)",
     "zoomOutLimit": "Minimale Vergrößerung erreicht (50 %)",
