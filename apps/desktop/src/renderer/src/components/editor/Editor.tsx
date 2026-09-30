@@ -34,7 +34,7 @@ import {
 // findNext/findPrev/replaceNext/replaceAll 同一 Command 签名
 type PmSearchCommand = typeof pmFindNext;
 import { createTaskCapableListItemView } from './task-item-view';
-import { createImageView, handleImagePaste } from './image-support';
+import { createImageView, handleImageDrop, handleImagePaste } from './image-support';
 import { fragmentToPlainText } from './doc-plain-text';
 import type { FragmentLike } from './doc-plain-text';
 import TableBar from './table-bar';
@@ -413,6 +413,9 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
             spellcheck: 'false',
           },
           handlePaste: handleImagePaste(folder),
+          // 拖入图片文件时拦下 PM 默认 drop（它会把 dataTransfer 里的外链 <img>
+          // 再插一份，与外层上传通道重复成两张图），由 NoteView 统一上传插入
+          handleDrop: handleImageDrop(),
           clipboardTextSerializer: (slice: ClipboardSliceLike) =>
             fragmentToPlainText(slice.content),
         }));

@@ -60,6 +60,18 @@ export function handleImagePaste(folder = '') {
   };
 }
 
+/** 拖拽处理：浏览器拖图时 dataTransfer 同时带 Files 与 text/html（外链 <img>），
+ *  ProseMirror 默认 drop 会把 html 里的外链图再插一份——与外层 NoteView 的上传
+ *  通道重复（一次拖入出现两张图）。这里拦下「含受支持图片文件」的 drop 返回 true，
+ *  PM 不再自行插入，由外层统一上传；纯 html/文本拖入与编辑器内部拖移放行。 */
+export function handleImageDrop() {
+  return (_view: unknown, event: DragEvent): boolean => {
+    const transfer = event.dataTransfer;
+    if (!transfer) return false;
+    return Array.from(transfer.files).some((f) => SUPPORTED_IMAGE_MIME_TYPES.has(f.type));
+  };
+}
+
 interface ImageNodeLike {
   type: unknown;
   attrs: { src?: string; alt?: string; title?: string };
