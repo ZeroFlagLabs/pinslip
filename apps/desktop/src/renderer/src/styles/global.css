@@ -3231,8 +3231,12 @@ input.sticky-note__title-input {
   user-select: none;
 }
 
-/* ProseMirror 交互残留：trailingBreak/separator 是编辑态补位元素，导出不应可见 */
-.export-card .ProseMirror .ProseMirror-trailingBreak,
+/* ProseMirror 交互残留静态化：
+   - separator（IMG hack）编辑态光标补位，导出不应可见，直接藏
+   - trailingBreak 只藏【文档末尾直接子级】那一个（防卡片底部幻影空行）——
+     空段落里的 trailingBreak 是空行占位（prosemirror-view addTextblockHacks
+     给每个空 textblock 都挂这个 class），误藏会让导出丢空行（2026-09-30 实测） */
+.export-card .ProseMirror > .ProseMirror-trailingBreak:last-child,
 .export-card .ProseMirror .ProseMirror-separator {
   display: none;
 }
