@@ -123,7 +123,15 @@ def render(size: int) -> Image.Image:
     # 折痕旁纸面投影（折痕左上侧的窄三角）
     d.polygon([(ax, ay), (bx, by), (bx - int(34 * k), by - int(34 * k))], fill=CURL_SHADOW)
 
-    return img.resize((size, size), Image.LANCZOS)
+    # macOS 菜单栏 template 图标：黑色剪影 + 负形镂空（实心剪影在 18pt 下
+    # 是个无细节的白圆角块,朋友实测反馈）——图钉孔、P 字母、卷角(剪影自带)
+    template = Image.new('RGBA', img.size, (0, 0, 0, 255))
+    template.putalpha(img.getchannel('A'))
+    td = ImageDraw.Draw(template)
+    td.ellipse((px - pr, py - pr, px + pr, py + pr), fill=(0, 0, 0, 0))  # 图钉孔
+    td.text((bx0 + (bx1 - bx0 - tw) / 2 - tb[0], by0 + (by1 - by0 - th) / 2 - tb[1]), 'P', font=font, fill=(0, 0, 0, 0))  # P 负形
+
+    return img.resize((size, size), Image.LANCZOS), template.resize((size, size), Image.LANCZOS)
 
 
 def main() -> None:
@@ -132,12 +140,9 @@ def main() -> None:
     ap.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', 'apps', 'desktop', 'resources', 'icon.png'))
     args = ap.parse_args()
     out = os.path.abspath(args.out)
-    img = render(args.size)
+    img, template = render(args.size)
     img.save(out)
     print(f'[gen-icon] ok → {out} ({args.size}x{args.size})')
-    # macOS 菜单栏 template 图标：同轮廓的黑色剪影（系统按深浅菜单栏自动反色）
-    template = Image.new('RGBA', img.size, (0, 0, 0, 255))
-    template.putalpha(img.getchannel('A'))
     t_out = os.path.join(os.path.dirname(out), 'iconTemplate.png')
     template.save(t_out)
     print(f'[gen-icon] ok → {t_out} (template)')
