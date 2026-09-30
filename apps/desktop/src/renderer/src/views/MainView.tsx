@@ -1019,8 +1019,8 @@ export default function MainView() {
   const openNote = (id: string) => window.api.createNote(id);
   const createNote = () => window.api.createNote();
 
-  /** 列表项「复制全部」：拉全文 → 清 <br/> 空行标记（拷 markdown 源文，
-   *  不做语法剥离）→ 写剪贴板；✓ 反馈 1.2s */
+  /** 列表项「复制全部」：拉全文 → 转纯文本（折叠块分隔空行、保留有意空行，
+   *  与便签编辑器序列化同约定）→ 写剪贴板；✓ 反馈 1.2s */
   const copyAllNote = useCallback((note: NoteMeta) => {
     notesApi
       .get(note.id)
