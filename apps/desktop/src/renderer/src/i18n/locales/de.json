@@ -266,7 +266,7 @@
     "minutes": "Min.",
     "autoSyncAria": "Auto-Sync-Intervall (Minuten)",
     "syncOnChange": "Bei Änderungen synchronisieren",
-    "syncOnChangeHint": "Synchronisiert automatisch (Commit+Pull+Push) ca. 3 Minuten nach der letzten Eingabe; der Zeitzyklus bleibt als Fallback aktiv",
+    "syncOnChangeHint": "Synchronisiert automatisch (Commit+Pull+Push) ca. 2 Minuten nach der letzten Eingabe; der Zeitzyklus bleibt als Fallback aktiv",
     "conflictFiles": "{{count}} Dateien mit Konflikten",
     "conflictEtc": " usw.",
     "syncNow": "Jetzt synchronisieren",
@@ -283,7 +283,7 @@
     "divergenceRemote": "Lokal aus Remote neu aufbauen",
     "divergenceRemoteConfirm": "Sichern und durch Remote-Version ersetzen?",
     "divergenceHint": "„Remote überschreiben“ erzwingt den Push und verwirft die abweichende Remote-Historie; „Lokal neu aufbauen“ sichert zuerst lokale notes/inbox/attachments nach .pinslip/backups/ und ersetzt dann den lokalen Inhalt durch die Remote-Version",
-    "statusHint": "Änderungen werden nach 3 Minuten ohne Eingabe automatisch committet und alle {{minutes}} Min. gepusht & gepullt; Konflikte werden als Standard-git-Marker geschrieben und verschwinden nach dem Auflösen"
+    "statusHint": "Änderungen werden nach 2 Minuten ohne Eingabe automatisch committet und alle {{minutes}} Min. gepusht & gepullt; Konflikte werden als Standard-git-Marker geschrieben und verschwinden nach dem Auflösen"
   },
   "mcp": {
     "aiAccess": "KI-Zugriff",

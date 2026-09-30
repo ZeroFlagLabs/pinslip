@@ -5,11 +5,13 @@ import {
   Editor as MilkdownCore,
   editorViewCtx,
   editorViewOptionsCtx,
+  marksCtx,
   nodeViewCtx,
   remarkStringifyOptionsCtx,
   rootCtx,
 } from '@milkdown/core';
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react';
+import { Plugin, PluginKey } from '@milkdown/prose/state';
 import {
   commonmark,
   toggleStrongCommand,
@@ -42,6 +44,28 @@ import TableBar from './table-bar';
 /** prosemirror-search 官方插件（命中装饰 + find/replace 命令）：
  *  $prose 包装成 Milkdown 插件挂链，与 nodeViewCtx 直注同层机制，不动现有插件结构 */
 const pmSearchPlugin = $prose(() => pmSearch());
+
+/** 行内样式改非包容（inclusive: false）：Milkdown 的 strong/emphasis/inlineCode/
+ *  link/strike_through 全部默认 inclusive（连 link 都是），光标停在样式文本
+ *  边界外继续输入会继承样式，粘贴带格式文本后尤为困扰。
+ *  改非包容后：边界外输入一律纯文本（对齐 Obsidian/Typora 手感）；边界内部
+ *  （前后同一样式）仍继承；工具栏/快捷键显式 toggle 走 storedMarks，不受影响。 */
+const NON_INCLUSIVE_MARKS = new Set(['strong', 'emphasis', 'inlineCode', 'link', 'strike_through']);
+
+/** 粘贴后清 storedMarks：PM 粘贴默认把片尾样式设为待用样式，粘贴完原地继续
+ *  输入会无视 inclusive 直接套用——清掉后样式完全由边界位置决定（配合上面的
+ *  非包容样式 = 纯文本）。无文档变更，不触发 markdownUpdated/保存。 */
+const pasteClearMarksPlugin = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey('pinslip-paste-clear-marks'),
+      appendTransaction: (transactions, _prev, next) => {
+        if (!next.storedMarks) return null;
+        if (!transactions.some((tr) => tr.getMeta('paste'))) return null;
+        return next.tr.setStoredMarks(null);
+      },
+    }),
+);
 
 export interface EditorProps {
   /** 初始 Markdown 内容（仅初始化时使用一次） */
@@ -425,9 +449,19 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
       })
       .use(commonmark)
       .use(gfm)
+      // 非包容样式覆写：同步段在 commonmark/gfm 注册之后、schema 组装之前执行
+      // （插件 handler 并发加载，但 await 前的同步代码按挂链顺序跑完）
+      .use((ctx) => async () => {
+        ctx.update(marksCtx, (prev) =>
+          prev.map(([id, spec]): [string, typeof spec] =>
+            NON_INCLUSIVE_MARKS.has(id) ? [id, { ...spec, inclusive: false }] : [id, spec],
+          ),
+        );
+      })
       .use(history)
       .use(listener)
-      .use(pmSearchPlugin),
+      .use(pmSearchPlugin)
+      .use(pasteClearMarksPlugin),
   []);
 
   return <Milkdown />;

@@ -266,7 +266,7 @@
     "minutes": "min",
     "autoSyncAria": "Auto sync interval (minutes)",
     "syncOnChange": "Sync on change",
-    "syncOnChangeHint": "Auto-syncs (commit+pull+push) about 3 minutes after you stop editing; the periodic cycle still runs as a fallback",
+    "syncOnChangeHint": "Auto-syncs (commit+pull+push) about 2 minutes after you stop editing; the periodic cycle still runs as a fallback",
     "conflictFiles": "{{count}} files with conflicts",
     "conflictEtc": " etc.",
     "syncNow": "Sync now",
@@ -283,7 +283,7 @@
     "divergenceRemote": "Rebuild local from remote",
     "divergenceRemoteConfirm": "Back up & replace with remote?",
     "divergenceHint": "\"Overwrite remote\" force-pushes and discards the diverged remote history; \"Rebuild local\" first backs up local notes/inbox/attachments to .pinslip/backups/, then replaces local content with the remote version",
-    "statusHint": "Changes auto-commit after 3 idle minutes and sync every {{minutes}} min; conflicts are written as standard git markers and disappear once resolved"
+    "statusHint": "Changes auto-commit after 2 idle minutes and sync every {{minutes}} min; conflicts are written as standard git markers and disappear once resolved"
   },
   "mcp": {
     "aiAccess": "AI access",

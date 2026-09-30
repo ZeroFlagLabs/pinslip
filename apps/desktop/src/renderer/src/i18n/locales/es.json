@@ -266,7 +266,7 @@
     "minutes": "min",
     "autoSyncAria": "Intervalo de sincronización (minutos)",
     "syncOnChange": "Sincronizar al cambiar",
-    "syncOnChangeHint": "Sincroniza automáticamente (commit+pull+push) unos 3 minutos después de dejar de editar; el ciclo periódico sigue como respaldo",
+    "syncOnChangeHint": "Sincroniza automáticamente (commit+pull+push) unos 2 minutos después de dejar de editar; el ciclo periódico sigue como respaldo",
     "conflictFiles": "{{count}} archivos con conflictos",
     "conflictEtc": " etc.",
     "syncNow": "Sincronizar ahora",
@@ -283,7 +283,7 @@
     "divergenceRemote": "Reconstruir local desde remoto",
     "divergenceRemoteConfirm": "¿Respaldar y reemplazar con la versión remota?",
     "divergenceHint": "«Sobrescribir remoto» fuerza el push y descarta el historial remoto divergente; «Reconstruir local» primero respalda notes/inbox/attachments en .pinslip/backups/ y luego reemplaza el contenido local con la versión remota",
-    "statusHint": "Los cambios se confirman automáticamente tras 3 minutos sin actividad y se sincronizan cada {{minutes}} min; los conflictos se escriben como marcadores git estándar y desaparecen al resolverlos"
+    "statusHint": "Los cambios se confirman automáticamente tras 2 minutos sin actividad y se sincronizan cada {{minutes}} min; los conflictos se escriben como marcadores git estándar y desaparecen al resolverlos"
   },
   "mcp": {
     "aiAccess": "Acceso de IA",

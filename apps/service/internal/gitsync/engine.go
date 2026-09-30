@@ -1,7 +1,7 @@
 // engine.go — 同步循环状态机（设计稿 M3-2）：
 //
 //	启动 pull（已配置时）→ watching
-//	  │ 文件变更防抖 3 分钟无变更 → auto-commit
+//	  │ 文件变更防抖 2 分钟无变更 → auto-commit
 //	  │   （syncOnChange 开启时改跑一轮完整 commit+pull+push，同一 opMu 串行）
 //	  │ 定时（可配 pushIntervalMin，默认 10 分钟）→ commit + pull + push（push 前必 pull）
 //	  │ 失败 backoff 1m→5m→15m 封顶，恢复自动追上
@@ -30,7 +30,7 @@ import (
 
 // 默认定时参数（测试可覆盖）。
 var (
-	defaultDebounce     = 3 * time.Minute
+	defaultDebounce     = 2 * time.Minute
 	defaultPushInterval = 10 * time.Minute
 	defaultBackoff      = []time.Duration{1 * time.Minute, 5 * time.Minute, 15 * time.Minute}
 )

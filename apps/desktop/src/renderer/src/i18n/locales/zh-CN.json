@@ -266,7 +266,7 @@
     "minutes": "分钟",
     "autoSyncAria": "自动同步间隔（分钟）",
     "syncOnChange": "有变更时自动同步",
-    "syncOnChangeHint": "停手约 3 分钟后自动同步（commit+pull+push），定时循环仍作兜底",
+    "syncOnChangeHint": "停手约 2 分钟后自动同步（commit+pull+push），定时循环仍作兜底",
     "conflictFiles": "待解冲突 {{count}} 个文件",
     "conflictEtc": " 等",
     "syncNow": "立即同步",
@@ -283,7 +283,7 @@
     "divergenceRemote": "以远端为准重建本地",
     "divergenceRemoteConfirm": "确认备份并替换为远端？",
     "divergenceHint": "「以本地为准」会强制推送并丢弃远端分叉历史；「以远端为准」会先把本地 notes/inbox/attachments 备份到 .pinslip/backups/ 再替换为远端版本",
-    "statusHint": "便签变更 3 分钟无操作自动提交，每 {{minutes}} 分钟自动推拉；冲突内容会写入标准 git markers，解完即消失"
+    "statusHint": "便签变更 2 分钟无操作自动提交，每 {{minutes}} 分钟自动推拉；冲突内容会写入标准 git markers，解完即消失"
   },
   "mcp": {
     "aiAccess": "AI 接入",

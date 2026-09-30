@@ -266,7 +266,7 @@
     "minutes": "분",
     "autoSyncAria": "자동 동기화 간격(분)",
     "syncOnChange": "변경 시 자동 동기화",
-    "syncOnChangeHint": "작업을 멈춘 후 약 3분 뒤 자동 동기화(commit+pull+push)되며, 주기적 사이클은 계속 폴백으로 동작합니다",
+    "syncOnChangeHint": "작업을 멈춘 후 약 2분 뒤 자동 동기화(commit+pull+push)되며, 주기적 사이클은 계속 폴백으로 동작합니다",
     "conflictFiles": "충돌 해결 필요 {{count}}개 파일",
     "conflictEtc": " 외",
     "syncNow": "지금 동기화",
@@ -283,7 +283,7 @@
     "divergenceRemote": "원격으로 로컬 재구성",
     "divergenceRemoteConfirm": "백업 후 원격 버전으로 교체할까요?",
     "divergenceHint": "'로컬로 덮어쓰기'는 강제 푸시로 원격의 분기 히스토리를 버립니다. '원격으로 재구성'은 로컬 notes/inbox/attachments를 .pinslip/backups/에 백업한 뒤 원격 버전으로 교체합니다",
-    "statusHint": "변경 후 3분간 조작이 없으면 자동 커밋되고, {{minutes}}분마다 자동으로 푸시·풀합니다. 충돌은 표준 git 마커로 기록되며 해결하면 사라집니다"
+    "statusHint": "변경 후 2분간 조작이 없으면 자동 커밋되고, {{minutes}}분마다 자동으로 푸시·풀합니다. 충돌은 표준 git 마커로 기록되며 해결하면 사라집니다"
   },
   "mcp": {
     "aiAccess": "AI 연동",
