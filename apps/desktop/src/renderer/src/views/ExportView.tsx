@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { exportBgOf } from '../utils/colors';
+import logoMarkUrl from '../assets/logo-mark.png';
 import type { ExportImagePayload } from '@shared/types';
 
 /** 就绪上报的兜底超时：图片 decode / 字体加载挂起也不整单失败 */
@@ -19,7 +20,14 @@ export default function ExportView() {
   /** StrictMode 下 effect 双跑，上报只发一次 */
   const reportedRef = useRef(false);
 
-  useEffect(() => window.api.onExportPayload(setPayload), []);
+  useEffect(() => {
+    const unsub = window.api.onExportPayload(setPayload);
+    // 握手：订阅挂好后才上报——主进程收到握手才下发 payload。
+    // did-finish-load 时 React 可能尚未挂载，主进程直接 send 会丢消息（白图根因）；
+    // StrictMode 双挂载会重复上报，主进程幂等重发
+    window.api.exportViewReady();
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (!payload || reportedRef.current) return;
@@ -70,7 +78,10 @@ export default function ExportView() {
           </div>
         )}
       </div>
-      <div className="export-watermark">PinSlip</div>
+      <div className="export-watermark">
+        <img className="export-watermark__logo" src={logoMarkUrl} alt="" />
+        PinSlip
+      </div>
     </div>
   );
 }

@@ -76,6 +76,7 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener(IPC.ExportPayload, listener);
   },
   exportReady: (height) => ipcRenderer.send(IPC.ExportReady, height),
+  exportViewReady: () => ipcRenderer.send(IPC.ExportViewReady),
 };
 
 contextBridge.exposeInMainWorld('api', api);

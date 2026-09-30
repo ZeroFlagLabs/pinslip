@@ -126,46 +126,48 @@ export default function FindBar({
             }
           }}
         />
-        {query !== '' && (
-          <span className={`sticky-note__findbar-count${noMatch ? ' is-empty' : ''}`}>
-            {noMatch ? t('note.find.noResult') : `${status.active}/${status.total}`}
-          </span>
-        )}
-        <button
-          className="sticky-note__btn"
-          data-tip={t('note.find.prev')}
-          data-tip-align="left"
-          aria-label={t('note.find.prev')}
-          disabled={navDisabled}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={goPrev}
-        >
-          <CaretUpIcon />
-        </button>
-        <button
-          className="sticky-note__btn"
-          data-tip={t('note.find.next')}
-          data-tip-align="left"
-          aria-label={t('note.find.next')}
-          disabled={navDisabled}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={goNext}
-        >
-          <CaretDownIcon />
-        </button>
-        <button
-          className="sticky-note__btn"
-          data-tip={t('note.find.close')}
-          data-tip-align="right"
-          aria-label={t('note.find.close')}
-          onClick={onClose}
-        >
-          <XIcon />
-        </button>
+        <div className="sticky-note__findbar-actions">
+          {query !== '' && (
+            <span className={`sticky-note__findbar-count${noMatch ? ' is-empty' : ''}`}>
+              {noMatch ? t('note.find.noResult') : `${status.active}/${status.total}`}
+            </span>
+          )}
+          <button
+            className="sticky-note__btn"
+            data-tip={t('note.find.prev')}
+            data-tip-align="left"
+            aria-label={t('note.find.prev')}
+            disabled={navDisabled}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={goPrev}
+          >
+            <CaretUpIcon />
+          </button>
+          <button
+            className="sticky-note__btn"
+            data-tip={t('note.find.next')}
+            data-tip-align="left"
+            aria-label={t('note.find.next')}
+            disabled={navDisabled}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={goNext}
+          >
+            <CaretDownIcon />
+          </button>
+          <button
+            className="sticky-note__btn"
+            data-tip={t('note.find.close')}
+            data-tip-align="right"
+            aria-label={t('note.find.close')}
+            onClick={onClose}
+          >
+            <XIcon />
+          </button>
+        </div>
       </div>
       {replaceOpen && (
         <div className="sticky-note__findbar-row">
-          {/* 与首行替换箭头同宽的占位，两行输入框左缘对齐 */}
+          {/* 与首行替换箭头同列的占位，两行输入框同列同宽 */}
           <span className="sticky-note__findbar-spacer" />
           <input
             ref={replaceRef}
@@ -180,22 +182,24 @@ export default function FindBar({
               }
             }}
           />
-          <button
-            className="sticky-note__findbar-textbtn"
-            disabled={navDisabled}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={doReplace}
-          >
-            {t('note.find.replace')}
-          </button>
-          <button
-            className="sticky-note__findbar-textbtn"
-            disabled={navDisabled}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={doReplaceAll}
-          >
-            {t('note.find.replaceAll')}
-          </button>
+          <div className="sticky-note__findbar-actions">
+            <button
+              className="sticky-note__findbar-textbtn"
+              disabled={navDisabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={doReplace}
+            >
+              {t('note.find.replace')}
+            </button>
+            <button
+              className="sticky-note__findbar-textbtn"
+              disabled={navDisabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={doReplaceAll}
+            >
+              {t('note.find.replaceAll')}
+            </button>
+          </div>
         </div>
       )}
     </div>

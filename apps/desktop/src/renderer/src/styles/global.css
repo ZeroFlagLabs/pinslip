@@ -989,6 +989,96 @@ input.sticky-note__title-input {
   left: 6px;
 }
 
+/* ===== 便签内搜索条（Ctrl+F）：编辑器区域右上角浮层卡片（不贴顶） ===== */
+/* 三列网格：展开位 / 输入框 / 操作区——两行输入框同列同宽（flex 做不到），
+   行 div 用 display:contents 让子元素直接进父网格 */
+.sticky-note__findbar {
+  position: absolute;
+  right: 10px; /* top 由组件 inline 注入（标题栏/横幅避让） */
+  z-index: 30;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  padding: 4px 6px;
+  display: grid;
+  grid-template-columns: 22px minmax(120px, 1fr) auto;
+  gap: 6px 4px; /* 行距 6px，列距 4px */
+  max-width: calc(100% - 20px);
+}
+
+.sticky-note__findbar-row {
+  display: contents;
+}
+
+.sticky-note__findbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: end;
+}
+
+.sticky-note__findbar-input {
+  flex: 1;
+  min-width: 120px;
+  height: 22px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 5px;
+  padding: 0 6px;
+  font-size: 12px;
+  outline: none;
+  background: #fffdf5;
+}
+.sticky-note__findbar-input:focus {
+  border-color: #f9a825;
+}
+
+.sticky-note__findbar-count {
+  font-size: 11px;
+  color: #999;
+  white-space: nowrap;
+  padding: 0 2px;
+  user-select: none;
+}
+.sticky-note__findbar-count.is-empty {
+  color: #d32f2f;
+}
+
+.sticky-note__findbar-spacer {
+  /* 占位第二行第一列（展开位列），两行输入框同列同宽由网格保证 */
+}
+
+.sticky-note__findbar-textbtn {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: #666;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sticky-note__findbar-textbtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+.sticky-note__findbar-textbtn:disabled {
+  color: #bbb;
+  cursor: default;
+}
+
+/* 搜索命中高亮（prosemirror-search 装饰类）：
+   全部命中淡黄底，当前命中琥珀底 + 描边 */
+.ProseMirror-search-match {
+  background: rgba(255, 213, 79, 0.55);
+  border-radius: 2px;
+}
+.ProseMirror-active-search-match {
+  background: rgba(249, 168, 37, 0.75);
+  outline: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
+}
+
 .sticky-note__menu-item {
   display: flex;
   align-items: center;
@@ -2851,8 +2941,8 @@ input.sticky-note__title-input {
 
 .export-card {
   position: relative; /* 压在噪点层（定位元素）之上 */
+  /* 宽度跟随便签实际卡片宽：主进程按调用方窗口换算好导出窗宽，这里铺满舞台即可 */
   width: 100%;
-  max-width: 640px;
   display: flex;
   flex-direction: column;
   background: var(--note-bg);
@@ -2968,7 +3058,17 @@ input.sticky-note__title-input {
 .export-watermark {
   position: relative; /* 压在噪点层之上 */
   margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.08em;
-  color: rgba(78, 52, 46, 0.45);
+  color: rgba(78, 52, 46, 0.5);
+}
+
+.export-watermark__logo {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
 }

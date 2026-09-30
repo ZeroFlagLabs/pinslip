@@ -77,7 +77,10 @@ export const IPC = {
   UpdateOpenDownload: 'update:open-download',
   /** 导出便签为图片（渲染→主进程，带 ExportImagePayload；主进程开隐藏离屏窗渲染后截图） */
   ExportImage: 'export:image',
-  /** 导出载荷下发（主进程→导出窗，did-finish-load 后发送），参数 ExportImagePayload */
+  /** 导出窗挂载握手（导出窗→主进程）：订阅就绪可收 payload；did-finish-load 时
+   *  React 可能尚未挂载，直接发 payload 会丢（白图根因），每次握手重发一次兜底 */
+  ExportViewReady: 'export:view-ready',
+  /** 导出载荷下发（主进程→导出窗，收到 ExportViewReady 握手后发送），参数 ExportImagePayload */
   ExportPayload: 'export:payload',
   /** 导出窗渲染就绪上报（导出窗→主进程），参数为内容高度（DIP） */
   ExportReady: 'export:ready',

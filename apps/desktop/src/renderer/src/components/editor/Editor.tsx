@@ -84,6 +84,24 @@ function countFindMatches(view: { state: Parameters<typeof getSearchState>[0] })
   return { total, active };
 }
 
+/** 把当前选区（命中）滚进可视区：PM 的 scrollToSelection 要求 DOM 选区在编辑器内，
+ *  焦点在搜索框时它空转（domSelectionRange 不在 view.dom 里）——所以自己滚：
+ *  取选区两端坐标相对滚动容器（.ProseMirror，overflow-y:auto）计算，
+ *  已在可视区内不滚，区外滚到上 1/3 处 */
+function scrollMatchIntoView(view: {
+  state: { selection: { from: number; to: number } };
+  dom: HTMLElement;
+  coordsAtPos(pos: number): { top: number; bottom: number };
+}): void {
+  const scroller = view.dom;
+  const box = scroller.getBoundingClientRect();
+  const top = view.coordsAtPos(view.state.selection.from).top;
+  const bottom = view.coordsAtPos(view.state.selection.to).bottom;
+  if (top >= box.top && bottom <= box.bottom) return; // 已完整可见
+  const target = scroller.scrollTop + top - box.top - scroller.clientHeight / 3;
+  scroller.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+}
+
 /** 对外暴露的编辑器句柄 */
 export interface EditorHandle {
   /** 聚焦编辑器并把光标移到文末（窗口激活/点空白区时直接可输入）。
@@ -139,6 +157,9 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
         getEditor().action((ctx) => {
           const view = ctx.get(editorViewCtx);
           cmd(view.state, view.dispatch as (tr: unknown) => void, view);
+          // PM 的 tr.scrollIntoView 在焦点位于搜索框时空转（DOM 选区不在编辑器内），
+          // 自行滚动到命中（已在可视区不滚）
+          scrollMatchIntoView(view);
           status = countFindMatches(view);
         });
         return status;
@@ -303,10 +324,11 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
             return;
           }
           view.dispatch(setSearchState(view.state.tr, query));
-          // 只有搜索词变化才跳命中（输入替换词不应挪动选区）；findNext 命令
-          // 自带 scrollIntoView，当前命中装饰随选区重合自动加强
+          // 只有搜索词变化才跳命中（输入替换词不应挪动选区）；
+          // PM 自带的 scrollIntoView 在焦点位于搜索框时空转，自行滚动兜底
           if (query.valid && (!prev || prev.query.search !== search)) {
             pmFindNext(view.state, view.dispatch, view);
+            scrollMatchIntoView(view);
           }
           status = countFindMatches(view);
         });

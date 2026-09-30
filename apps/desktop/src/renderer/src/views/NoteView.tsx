@@ -1281,7 +1281,7 @@ export default function NoteView() {
         <FindBar
           editorRef={editorRef}
           replaceOpen={findReplaceOpen}
-          topOffset={externalUpdate !== null ? 60 : 34}
+          topOffset={externalUpdate !== null ? 68 : 42}
           onToggleReplace={() => setFindReplaceOpen((v) => !v)}
           onOpenReplace={() => setFindReplaceOpen(true)}
           onClose={closeFindBar}

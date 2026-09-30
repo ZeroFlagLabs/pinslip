@@ -287,6 +287,8 @@ export interface ElectronAPI {
   exportNoteImage(payload: ExportImagePayload): Promise<ExportImageResult>;
   /** 订阅导出载荷下发（仅隐藏导出窗的 ExportView 使用），返回取消订阅函数 */
   onExportPayload(cb: (payload: ExportImagePayload) => void): () => void;
+  /** 导出窗挂载握手：订阅就绪后上报，主进程据此下发 payload（每次握手重发一次） */
+  exportViewReady(): void;
   /** 导出窗上报渲染就绪与内容高度（主进程据此 setContentSize 后截图） */
   exportReady(height: number): void;
 }
