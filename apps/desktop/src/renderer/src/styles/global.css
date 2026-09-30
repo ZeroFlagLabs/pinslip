@@ -1909,6 +1909,89 @@ input.sticky-note__title-input {
   border-color: var(--mv-border);
 }
 
+/* 工具栏按钮排序列表（高级定制）：指针拖拽换位，插入位指示线；
+   第 8/9 位间分隔线标注「超出进 ⋯ 菜单」 */
+.settings-sortlist {
+  position: relative; /* 插入位指示线的定位容器 */
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.settings-sortlist__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.settings-sortlist__row.is-dragging {
+  background: var(--mv-btn-hover-bg);
+}
+
+.settings-sortlist__handle {
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--mv-faint);
+  cursor: grab;
+  flex: none;
+  touch-action: none; /* 指针拖拽不被浏览器原生手势抢 */
+}
+
+.settings-sortlist__handle:active {
+  cursor: grabbing;
+}
+
+.settings-sortlist__handle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-sortlist__name {
+  font-size: 12px;
+  color: var(--mv-label);
+}
+
+/* 第 8/9 位分隔线标注：以上直接显示，以下进 ⋯ 菜单 */
+.settings-sortlist__overflow {
+  margin: 4px 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--mv-hairline);
+  font-size: 11px;
+  color: var(--mv-faint);
+}
+
+/* 拖拽插入位指示线（top 由拖拽追踪计算） */
+.settings-sortlist__indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: #e0b93f;
+  pointer-events: none;
+}
+
+/* 「恢复默认顺序」按钮：行内右对齐，比主按钮轻量 */
+.settings-sortlist__reset {
+  margin-left: auto;
+  padding: 3px 8px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-sortlist__reset svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* 回收区保留天数的下拉选择（与行右侧对齐，风格同面板控件） */
 .settings-panel__select {
   margin-left: auto;

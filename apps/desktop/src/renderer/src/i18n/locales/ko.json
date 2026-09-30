@@ -226,7 +226,15 @@
     "blankNoteShortcutCtrlShiftAltN": "Ctrl+Shift+Alt+N",
     "blankNoteShortcutCtrlAltInsert": "Ctrl+Alt+Insert",
     "blankNoteShortcutHint": "누르면 루트 폴더에 빈 메모를 만들고 포커스합니다. 위치는 '새 메모 위치' 설정을 따릅니다",
-    "blankNoteShortcutRegisterFailed": "단축키 등록에 실패했습니다. 다른 앱이 사용 중일 수 있습니다. 이전 설정으로 복원했습니다"
+    "blankNoteShortcutRegisterFailed": "단축키 등록에 실패했습니다. 다른 앱이 사용 중일 수 있습니다. 이전 설정으로 복원했습니다",
+    "toolbarButtons": "도구 모음 버튼",
+    "toolbarButtonsHint": "드래그하여 순서 변경: 앞의 8개가 노트 도구 모음에 바로 표시되고 나머지는 ⋯ 메뉴로 들어갑니다. 창이 좁으면 끝부터 숨겨집니다",
+    "toolbarButtonsOverflow": "이 아래는 ⋯ 메뉴로",
+    "toolbarButtonsReset": "기본 순서로 복원",
+    "toolbarButtonsResetTip": "버튼 순서를 기본값으로 되돌립니다",
+    "toolbarDragTip": "드래그하여 순서 변경",
+    "toolbarZoomIn": "확대",
+    "toolbarZoomOut": "축소"
   },
   "update": {
     "hintDev": "개발 모드에서는 업데이트를 확인할 수 없습니다",

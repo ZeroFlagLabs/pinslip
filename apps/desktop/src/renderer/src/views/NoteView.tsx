@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PlusIcon from '~icons/ph/plus';
@@ -47,6 +47,7 @@ import { formatRelativeTime } from '../utils/time';
 import { noteContentToPlainText } from '../utils/plain-text';
 import { shortenFolder } from '../utils/path';
 import { COLLAPSE_ANIM_MS } from '@shared/anim';
+import { sanitizeToolbarButtons, TOOLBAR_BUTTON_DEFAULT_ORDER, TOOLBAR_DISPLAY_LIMIT } from '@shared/toolbar';
 import type { GroupState, NoteColor, SyncStatus } from '@shared/types';
 
 type SaveState = 'loading' | 'idle' | 'saving' | 'saved' | 'error';
@@ -170,8 +171,13 @@ export default function NoteView() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   /** 窗口是否激活（跟随 OS 焦点，比 :focus-within 可靠——点面板任意处都算） */
   const [active, setActive] = useState(() => document.hasFocus());
-  /** 工具栏优先级隐藏：编辑区从低优先级藏起的按钮数（0..3，保底留「加粗」） */
+  /** 工具栏优先级隐藏：编辑区从低优先级藏起的按钮数（0..3，保底留区首） */
   const [hiddenEdit, setHiddenEdit] = useState(0);
+  /** 工具栏左区按钮的用户自定义顺序（有序 id 列表；缺省 = 现状顺序）。
+   *  挂载读 getAdvanced + 订阅 advanced:changed 广播即时重排 */
+  const [toolbarOrder, setToolbarOrder] = useState<string[]>(() => [
+    ...TOOLBAR_BUTTON_DEFAULT_ORDER,
+  ]);
   /** 分类区隐藏级别：0=全显，1=藏复制全部，2=再藏保存状态（保底留 标签/文件夹/⋯） */
   const [hiddenAux, setHiddenAux] = useState(0);
   /** 复制全部成功反馈（图标短暂变 ✓） */
@@ -264,6 +270,22 @@ export default function NoteView() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [reflowToolbar]);
+
+  // 工具栏按钮自定义顺序：挂载读取 + 订阅主进程广播（主窗口高级定制改序后
+  // 即时重排，无需重开）；广播载荷是补齐后的完整对象，渲染层再过一遍
+  // sanitize 兜底（广播外的来源不入此通道）
+  useEffect(() => {
+    let alive = true;
+    window.api
+      .getAdvanced()
+      .then((a) => {
+        if (alive) setToolbarOrder(sanitizeToolbarButtons(a.toolbarButtons));
+      })
+      .catch(() => {});
+    return window.api.onAdvancedChanged((a) =>
+      setToolbarOrder(sanitizeToolbarButtons(a.toolbarButtons)),
+    );
+  }, []);
 
   // 文件夹面板关闭时清空路径筛选（下次打开回到全量列表）
   useEffect(() => {
@@ -957,67 +979,74 @@ export default function NoteView() {
         ? t('note.syncTipDirty')
         : t('note.syncTipSynced', { time: formatRelativeTime(t, syncStatus?.lastSyncAt) });
 
-  /** 编辑辅助区按钮：数组顺序即优先级（高 → 低），宽度不够时从尾部藏起，保底留加粗。
-   *  A−/A＋ 缩放按钮排最末（该区最低优先级，最先被收）；收进 ⋯ 菜单的项见菜单渲染处。
+  /** 编辑辅助区按钮：用户自定义顺序（toolbarOrder）即展示顺序，展示上限 8 个
+   *  （TOOLBAR_DISPLAY_LIMIT），宽度不够时从尾部藏起；收进 ⋯ 菜单的项按 id
+   *  动态找回（见菜单渲染处，写死的 hiddenEdit≥1/≥2/≥3 阈值已退役）。
    *  mousedown preventDefault：不抢编辑器 DOM 焦点，命令作用于当前选区后可继续输入 */
   const zoomOutTip =
     zoomPct <= ZOOM_MIN ? t('note.zoomOutLimit') : t('note.zoomOut', { pct: zoomPct });
   const zoomInTip =
     zoomPct >= ZOOM_MAX ? t('note.zoomInLimit') : t('note.zoomIn', { pct: zoomPct });
-  const editButtons = [
-    {
+  interface EditButtonDef {
+    key: string;
+    tip: string;
+    icon: ReactNode;
+    act: () => void;
+    disabled: boolean;
+  }
+  /** id → 按钮定义映射表（定制顺序的单一来源）；新按钮在此登记后进默认顺序表 */
+  const editButtonDefs: Record<string, EditButtonDef> = {
+    bold: {
       key: 'bold',
       tip: t('note.tipBold'),
       icon: <TextBolderIcon />,
       act: () => editorRef.current?.toggleMark('strong'),
       disabled: false,
     },
-    {
+    strike: {
       key: 'strike',
       tip: t('note.tipStrike'),
       icon: <TextStrikethroughIcon />,
       act: () => editorRef.current?.toggleMark('strikethrough'),
       disabled: false,
     },
-    {
+    task: {
       key: 'task',
       tip: t('note.tipTask'),
       icon: <ListChecksIcon />,
       act: () => editorRef.current?.toggleTaskList(),
       disabled: false,
     },
-    {
+    image: {
       key: 'image',
       tip: t('note.tipImage'),
       icon: <ImageIcon />,
       act: () => imageInputRef.current?.click(),
       disabled: false,
     },
-    {
+    zoomIn: {
       key: 'zoomIn',
       tip: zoomInTip,
       icon: <MagnifyingGlassPlusIcon />,
       act: () => stepZoom(ZOOM_STEP),
       disabled: zoomPct >= ZOOM_MAX,
     },
-    {
+    zoomOut: {
       key: 'zoomOut',
       tip: zoomOutTip,
       icon: <MagnifyingGlassMinusIcon />,
       act: () => stepZoom(-ZOOM_STEP),
       disabled: zoomPct <= ZOOM_MIN,
     },
-    {
-      // 插入表格(后续按钮可定制前先进编辑区):宽度收敛时倒数第二藏
+    table: {
       key: 'table',
       tip: t('note.table.insert'),
       icon: <TableIcon />,
       act: () => editorRef.current?.insertTable(),
       disabled: false,
     },
-    {
-      // 导出为图片放编辑区末尾:宽度收敛时最先被藏(hiddenEdit≥1),
-      // 两条目在 ⋯ 菜单找回
+    export: {
+      // 导出为图片：不在可视集时两条目（复制为图片/另存为 PNG）在 ⋯ 菜单找回
       key: 'export',
       tip: exported ? t('note.copied') : t('note.exportImage'),
       icon: exported ? <CheckIcon /> : <ExportIcon />,
@@ -1032,8 +1061,16 @@ export default function NoteView() {
       },
       disabled: exportBusy,
     },
-  ] as const;
-  const visibleEditButtons = editButtons.slice(0, editButtons.length - hiddenEdit);
+  };
+  // 按用户顺序构建（toolbarOrder 已过 sanitize，id 全覆盖）；展示上限 8 个，
+  // 宽度收敛（hiddenEdit）叠加在用户顺序上从尾部藏
+  const orderedEditButtons = toolbarOrder
+    .map((id) => editButtonDefs[id])
+    .filter((b): b is EditButtonDef => !!b);
+  const displayedEditButtons = orderedEditButtons.slice(0, TOOLBAR_DISPLAY_LIMIT);
+  const visibleEditButtons = displayedEditButtons.slice(0, displayedEditButtons.length - hiddenEdit);
+  /** 不在可视集的按钮（超出 8 位 + 被宽度收敛藏掉的尾部）：⋯ 菜单按 id 找回 */
+  const overflowEditButtons = orderedEditButtons.filter((b) => !visibleEditButtons.includes(b));
 
   /** 文件夹面板的路径筛选结果（大小写不敏感子串） */
   const filteredFolders = useMemo(() => {
@@ -1671,52 +1708,63 @@ export default function NoteView() {
         </div>
       )}
 
-      {/* ⋯ 菜单（被优先级收起的按钮在这里找回：编辑区从尾部藏起，
-          hiddenEdit≥1 藏导出、≥2 藏表格、≥3 藏 A−） */}
+      {/* ⋯ 菜单（不在可视集的按钮在这里按 id 动态找回：超出展示上限 8 个的
+          位次 + 被宽度收敛藏掉的尾部；导出保持「复制为图片/另存为 PNG」
+          两条目特殊形态，缩放的百分比/上限态文案照旧） */}
       {menuOpen && (
         <div className="sticky-note__menu">
-          {hiddenEdit >= 1 && (
-            <>
+          {overflowEditButtons.map((b) => {
+            if (b.key === 'export') {
+              return (
+                <Fragment key="export">
+                  <button
+                    className="sticky-note__menu-item"
+                    disabled={exportBusy}
+                    onClick={() => doExport('copy')}
+                  >
+                    <CopyIcon />
+                    {t('note.exportCopy')}
+                  </button>
+                  <button
+                    className="sticky-note__menu-item"
+                    disabled={exportBusy}
+                    onClick={() => doExport('save')}
+                  >
+                    <FloppyDiskIcon />
+                    {t('note.exportSave')}
+                  </button>
+                </Fragment>
+              );
+            }
+            // 缩放按钮：不收菜单（可连击调倍率），百分比/上限态文案照旧
+            if (b.key === 'zoomIn' || b.key === 'zoomOut') {
+              return (
+                <button
+                  key={b.key}
+                  className="sticky-note__menu-item"
+                  disabled={b.disabled}
+                  onClick={b.act}
+                >
+                  {b.icon}
+                  {b.tip}
+                </button>
+              );
+            }
+            return (
               <button
+                key={b.key}
                 className="sticky-note__menu-item"
-                disabled={exportBusy}
-                onClick={() => doExport('copy')}
+                disabled={b.disabled}
+                onClick={() => {
+                  setMenuOpen(false);
+                  b.act();
+                }}
               >
-                <CopyIcon />
-                {t('note.exportCopy')}
+                {b.icon}
+                {b.tip}
               </button>
-              <button
-                className="sticky-note__menu-item"
-                disabled={exportBusy}
-                onClick={() => doExport('save')}
-              >
-                <FloppyDiskIcon />
-                {t('note.exportSave')}
-              </button>
-            </>
-          )}
-          {hiddenEdit >= 2 && (
-            <button
-              className="sticky-note__menu-item"
-              onClick={() => {
-                setMenuOpen(false);
-                editorRef.current?.insertTable();
-              }}
-            >
-              <TableIcon />
-              {t('note.table.insert')}
-            </button>
-          )}
-          {hiddenEdit >= 3 && (
-            <button
-              className="sticky-note__menu-item"
-              disabled={zoomPct <= ZOOM_MIN}
-              onClick={() => stepZoom(-ZOOM_STEP)}
-            >
-              <MagnifyingGlassMinusIcon />
-              {zoomOutTip}
-            </button>
-          )}
+            );
+          })}
           <button
             className="sticky-note__menu-item"
             onClick={() => {

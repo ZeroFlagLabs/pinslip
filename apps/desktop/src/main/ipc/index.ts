@@ -208,6 +208,11 @@ export function registerIpcHandlers({ windowManager, goProcess }: IpcContext): v
     if (before.taskbarIcon !== after.taskbarIcon) {
       windowManager.setAllWindowsSkipTaskbar(!after.taskbarIcon);
     }
+    // 广播给所有已开窗口（仿语言切换先例）：便签窗口据此即时重排工具栏按钮，
+    // 无需重开；参数为补齐后的完整对象，渲染层直接取用 toolbarButtons
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.AdvancedChanged, after);
+    }
     return after;
   });
 

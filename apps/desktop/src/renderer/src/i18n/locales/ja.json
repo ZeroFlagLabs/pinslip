@@ -226,7 +226,15 @@
     "blankNoteShortcutCtrlShiftAltN": "Ctrl+Shift+Alt+N",
     "blankNoteShortcutCtrlAltInsert": "Ctrl+Alt+Insert",
     "blankNoteShortcutHint": "押すとルートフォルダに空白ノートを作成してフォーカスします。配置は「新規ノートの配置」に従います",
-    "blankNoteShortcutRegisterFailed": "ショートカットの登録に失敗しました。他のアプリが使用している可能性があります。元の設定に戻しました"
+    "blankNoteShortcutRegisterFailed": "ショートカットの登録に失敗しました。他のアプリが使用している可能性があります。元の設定に戻しました",
+    "toolbarButtons": "ツールバーボタン",
+    "toolbarButtonsHint": "ドラッグで並べ替え：先頭の 8 個が付箋ツールバーに直接表示され、残りは ⋯ メニューに収納されます。ウィンドウが狭い場合は末尾から隠れます",
+    "toolbarButtonsOverflow": "これ以降は ⋯ メニューへ",
+    "toolbarButtonsReset": "デフォルトの順序に戻す",
+    "toolbarButtonsResetTip": "ボタンの順序をデフォルトに戻します",
+    "toolbarDragTip": "ドラッグで並べ替え",
+    "toolbarZoomIn": "拡大",
+    "toolbarZoomOut": "縮小"
   },
   "update": {
     "hintDev": "開発モードではアップデート確認を利用できません",

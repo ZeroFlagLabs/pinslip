@@ -2,6 +2,7 @@ import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AdvancedSettings, ResolvedAdvancedSettings } from '../shared/types';
+import { sanitizeToolbarButtons, TOOLBAR_BUTTON_DEFAULT_ORDER } from '../shared/toolbar';
 
 /**
  * 应用设置（存 userData/settings.json，与 vault 数据分离——
@@ -25,6 +26,7 @@ const ADVANCED_DEFAULTS: ResolvedAdvancedSettings = {
   notePlacement: 'cascade',
   managerTheme: 'light',
   blankNoteShortcut: 'off',
+  toolbarButtons: [...TOOLBAR_BUTTON_DEFAULT_ORDER],
 };
 
 let cache: AppSettings | null = null;
@@ -79,13 +81,21 @@ export function setLanguage(lang: string): void {
   persist();
 }
 
-/** 高级定制选项（整对象返回，缺省字段补默认值） */
+/** 高级定制选项（整对象返回，缺省字段补默认值；toolbarButtons 过校验——
+ *  过滤未知 id/去重/缺项补末尾，旧配置遇到新版本新增按钮自动衔接） */
 export function getAdvanced(): ResolvedAdvancedSettings {
-  return { ...ADVANCED_DEFAULTS, ...(load().advanced ?? {}) };
+  const merged = { ...ADVANCED_DEFAULTS, ...(load().advanced ?? {}) };
+  merged.toolbarButtons = sanitizeToolbarButtons(merged.toolbarButtons);
+  return merged;
 }
 
-/** 按键部分更新高级定制选项（合并持久化，未提供的键保留原值） */
+/** 按键部分更新高级定制选项（合并持久化，未提供的键保留原值）；
+ *  toolbarButtons 落盘前先过校验，脏数据不进 settings.json */
 export function setAdvanced(patch: AdvancedSettings): void {
-  load().advanced = { ...(load().advanced ?? {}), ...patch };
+  const clean: AdvancedSettings = { ...patch };
+  if (patch.toolbarButtons !== undefined) {
+    clean.toolbarButtons = sanitizeToolbarButtons(patch.toolbarButtons);
+  }
+  load().advanced = { ...(load().advanced ?? {}), ...clean };
   persist();
 }

@@ -226,7 +226,15 @@
     "blankNoteShortcutCtrlShiftAltN": "Ctrl+Mayús+Alt+N",
     "blankNoteShortcutCtrlAltInsert": "Ctrl+Alt+Insert",
     "blankNoteShortcutHint": "Pulsa para crear una nota en blanco en la carpeta raíz y enfocarla; la posición sigue la opción de posición de notas nuevas",
-    "blankNoteShortcutRegisterFailed": "No se pudo registrar el atajo: puede estar en uso por otra aplicación. Se restauró el ajuste anterior"
+    "blankNoteShortcutRegisterFailed": "No se pudo registrar el atajo: puede estar en uso por otra aplicación. Se restauró el ajuste anterior",
+    "toolbarButtons": "Botones de la barra de herramientas",
+    "toolbarButtonsHint": "Arrastra para reordenar: los primeros 8 se muestran en la barra de la nota y el resto va al menú ⋯; si la ventana es estrecha, se ocultan desde el final",
+    "toolbarButtonsOverflow": "A partir de aquí: al menú ⋯",
+    "toolbarButtonsReset": "Restaurar orden predeterminado",
+    "toolbarButtonsResetTip": "Restaura el orden predeterminado de los botones",
+    "toolbarDragTip": "Arrastrar para reordenar",
+    "toolbarZoomIn": "Acercar",
+    "toolbarZoomOut": "Alejar"
   },
   "update": {
     "hintDev": "La búsqueda de actualizaciones no está disponible en modo desarrollo",

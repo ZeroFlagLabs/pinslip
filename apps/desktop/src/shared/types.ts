@@ -173,6 +173,10 @@ export interface AdvancedSettings {
   managerTheme?: 'light' | 'dark' | 'system';
   /** 空白便签全局快捷键（缺省 'off' 不注册）：按下在根目录新建空白便签并聚焦 */
   blankNoteShortcut?: BlankNoteShortcut;
+  /** 便签底部工具栏左区（编辑辅助区）按钮顺序：有序 id 列表，缺省 = 现状顺序。
+   *  展示上限 8 个是展示约束（渲染层截取），不是存储约束；读写两侧都过
+   *  sanitizeToolbarButtons（过滤未知 id/去重/缺项补末尾） */
+  toolbarButtons?: string[];
 }
 
 /** 补齐缺省值后的高级定制选项（settings:get-advanced 的返回形态） */
@@ -249,6 +253,9 @@ export interface ElectronAPI {
   setAdvanced(patch: AdvancedSettings): Promise<ResolvedAdvancedSettings>;
   /** 订阅界面语言切换广播（任一窗口改语言后，其他已开窗口即时跟进），返回取消订阅函数 */
   onLanguageChanged(cb: (lang: string) => void): () => void;
+  /** 订阅高级定制变更广播（set-advanced 后向全部窗口广播补齐后的完整对象，
+   *  便签窗口据此即时重排工具栏按钮），返回取消订阅函数 */
+  onAdvancedChanged(cb: (advanced: ResolvedAdvancedSettings) => void): () => void;
   /** 查询 OS 深色模式事实（nativeTheme.shouldUseDarkColors） */
   getOsDark(): Promise<boolean>;
   /** 订阅 OS 深色模式变更广播（managerTheme='system' 时渲染层即时跟进），返回取消订阅函数 */

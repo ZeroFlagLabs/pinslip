@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import PlusIcon from '~icons/ph/plus';
@@ -41,6 +41,9 @@ import CopyIcon from '~icons/ph/copy';
 import CheckIcon from '~icons/ph/check';
 import ClipboardIcon from '~icons/ph/clipboard';
 import KeyboardIcon from '~icons/ph/keyboard';
+import DotsSixVerticalIcon from '~icons/ph/dots-six-vertical';
+import SlidersHorizontalIcon from '~icons/ph/sliders-horizontal';
+import ArrowCounterClockwiseIcon from '~icons/ph/arrow-counter-clockwise';
 import type {
   BlankNoteShortcut,
   NoteMeta,
@@ -66,6 +69,24 @@ import {
   translateServerError,
 } from '../i18n';
 import type { LanguagePreference } from '../i18n';
+import {
+  sanitizeToolbarButtons,
+  TOOLBAR_BUTTON_DEFAULT_ORDER,
+  TOOLBAR_DISPLAY_LIMIT,
+} from '@shared/toolbar';
+
+/** 工具栏排序列表的按钮名 i18n key（复用 note.* tooltip 文案；缩放键带
+ *  {{pct}} 插值不适配列表名，用 settings 节的平名） */
+const TOOLBAR_BUTTON_LABEL_KEYS: Record<string, string> = {
+  bold: 'note.tipBold',
+  strike: 'note.tipStrike',
+  task: 'note.tipTask',
+  image: 'note.tipImage',
+  zoomIn: 'settings.toolbarZoomIn',
+  zoomOut: 'settings.toolbarZoomOut',
+  table: 'note.table.insert',
+  export: 'note.exportImage',
+};
 
 /** 紧凑时间格式：M/d HH:mm（窄面板下完整 locale 字符串放不下） */
 function formatTime(iso: string): string {
@@ -177,6 +198,20 @@ export default function MainView() {
   /** 空白便签全局快捷键（缺省 off 不注册）+ 注册失败提示态（新键被他应用占用时回滚选项） */
   const [blankNoteShortcut, setBlankNoteShortcut] = useState<BlankNoteShortcut>('off');
   const [blankNoteShortcutError, setBlankNoteShortcutError] = useState(false);
+  /** 工具栏按钮自定义顺序（高级定制拖拽排序；缺省 = 现状顺序）。
+   *  ref 与 state 同源：拖拽松手结算时读现值，避开闭包旧值 */
+  const [toolbarButtons, setToolbarButtonsState] = useState<string[]>(() => [
+    ...TOOLBAR_BUTTON_DEFAULT_ORDER,
+  ]);
+  const toolbarButtonsRef = useRef(toolbarButtons);
+  /** 排序列表拖拽态：from = 按住行索引，insert = 插入位，y = 指示线相对列表顶部的 px */
+  const [tbDrag, setTbDrag] = useState<{ from: number; insert: number; y: number } | null>(null);
+  const tbListRef = useRef<HTMLUListElement>(null);
+  /** 工具栏按钮顺序：state/ref 同步更新（拖拽结算读 ref 现值） */
+  const setToolbarButtons = useCallback((next: string[]) => {
+    toolbarButtonsRef.current = next;
+    setToolbarButtonsState(next);
+  }, []);
   /** 配置表单 dirty 标记：编辑中不被 30s 轮询回填覆盖；保存/取消/重开抽屉时复位 */
   const syncFormDirtyRef = useRef(false);
   // 三视图：列表（全部平铺）/ 文件夹（分层导航）/ 标签（按标签分组）
@@ -466,9 +501,10 @@ export default function MainView() {
         setNotePlacement(a.notePlacement);
         setManagerTheme(a.managerTheme);
         setBlankNoteShortcut(a.blankNoteShortcut);
+        setToolbarButtons(sanitizeToolbarButtons(a.toolbarButtons));
       })
       .catch(() => {});
-  }, []);
+  }, [setToolbarButtons]);
 
   // OS 深色模式事实：挂载读取一次 + 订阅 main 的 nativeTheme 变更广播
   // （managerTheme='system' 时即时跟进，无需重启）
@@ -496,6 +532,7 @@ export default function MainView() {
         setNotePlacement(a.notePlacement);
         setManagerTheme(a.managerTheme);
         setBlankNoteShortcut(a.blankNoteShortcut);
+        setToolbarButtons(sanitizeToolbarButtons(a.toolbarButtons));
       })
       .catch(() => {});
     trashApi
@@ -683,6 +720,74 @@ export default function MainView() {
     setLangPref(pref);
     void applyLanguagePreference(pref);
   }, []);
+
+  /** 拖拽排序落定：把 from 行移到插入位（insert 按含被拖行的列表坐标系，
+   *  越过自身时 -1 校正）；乐观更新，持久化失败回滚。主进程 set-advanced
+   *  广播后，开着的便签窗口即时重排 */
+  const commitToolbarOrder = useCallback(
+    (from: number, insert: number) => {
+      const cur = toolbarButtonsRef.current;
+      const next = [...cur];
+      const [moved] = next.splice(from, 1);
+      if (moved === undefined) return;
+      let to = insert > from ? insert - 1 : insert;
+      to = Math.max(0, Math.min(next.length, to));
+      if (to === from) return; // 原位 = no-op
+      next.splice(to, 0, moved);
+      setToolbarButtons(next);
+      window.api.setAdvanced({ toolbarButtons: next }).catch(() => setToolbarButtons(cur));
+    },
+    [setToolbarButtons],
+  );
+
+  /** 恢复默认顺序（乐观更新，失败回滚） */
+  const resetToolbarButtons = useCallback(() => {
+    const prev = toolbarButtonsRef.current;
+    const next = [...TOOLBAR_BUTTON_DEFAULT_ORDER];
+    setToolbarButtons(next);
+    window.api.setAdvanced({ toolbarButtons: next }).catch(() => setToolbarButtons(prev));
+  }, [setToolbarButtons]);
+
+  /** 排序列表手柄 pointerdown：指针驱动拖拽（便签组同款模式——不用 HTML5 DnD），
+   *  move 追踪插入位并画指示线，松手落定提交。指示线 y 在 move 时按当前行
+   *  矩形算好（拖拽期列表不重排，布局稳定） */
+  const startToolbarDrag = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>, from: number) => {
+      if (e.button !== 0) return; // 只响应左键
+      e.preventDefault();
+      const list = tbListRef.current;
+      if (!list) return;
+      // 插入位放闭包局部变量：松手结算直接读，不经过 setState updater
+      // （updater 须纯，StrictMode 双跑会把移动应用两次）
+      let insert = from;
+      setTbDrag({ from, insert, y: 0 });
+      const onMove = (ev: PointerEvent) => {
+        const rows = Array.from(list.querySelectorAll<HTMLElement>('.settings-sortlist__row'));
+        const listRect = list.getBoundingClientRect();
+        let y = listRect.height;
+        insert = rows.length;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i].getBoundingClientRect();
+          if (ev.clientY < r.top + r.height / 2) {
+            insert = i;
+            y = r.top - listRect.top;
+            break;
+          }
+        }
+        const ins = insert;
+        setTbDrag((cur) => (cur && cur.insert === ins ? cur : { from, insert: ins, y }));
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        setTbDrag(null);
+        commitToolbarOrder(from, insert);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [commitToolbarOrder],
+  );
 
   // 复制 MCP 接入配置（通用 mcpServers 形态，Claude Code / Kimi 等可直接粘贴）；
   // 成功后按钮短暂显示「已复制 ✓」（2s 恢复，与便签复制按钮同套路）
@@ -1797,6 +1902,51 @@ export default function MainView() {
                     {t('settings.blankNoteShortcutRegisterFailed')}
                   </div>
                 )}
+                {/* 工具栏按钮排序：指针拖拽换位（便签组同款模式，不用 HTML5 DnD），
+                    前 8 位直接显示在便签工具栏，超出位次进 ⋯ 菜单找回；
+                    即改即存即生效（主进程广播，便签窗口即时重排） */}
+                <div className="settings-panel__row">
+                  <SlidersHorizontalIcon className="settings-panel__row-icon" />
+                  <span className="settings-panel__label">{t('settings.toolbarButtons')}</span>
+                  <button
+                    className="settings-panel__btn settings-sortlist__reset"
+                    title={t('settings.toolbarButtonsResetTip')}
+                    onClick={resetToolbarButtons}
+                  >
+                    <ArrowCounterClockwiseIcon />
+                    {t('settings.toolbarButtonsReset')}
+                  </button>
+                </div>
+                <div className="settings-panel__hint">{t('settings.toolbarButtonsHint')}</div>
+                <ul className="settings-sortlist" ref={tbListRef}>
+                  {toolbarButtons.map((id, i) => (
+                    <Fragment key={id}>
+                      {i === TOOLBAR_DISPLAY_LIMIT && (
+                        <li className="settings-sortlist__overflow" aria-hidden>
+                          {t('settings.toolbarButtonsOverflow')}
+                        </li>
+                      )}
+                      <li
+                        className={`settings-sortlist__row${tbDrag?.from === i ? ' is-dragging' : ''}`}
+                      >
+                        <button
+                          className="settings-sortlist__handle"
+                          aria-label={t('settings.toolbarDragTip')}
+                          title={t('settings.toolbarDragTip')}
+                          onPointerDown={(e) => startToolbarDrag(e, i)}
+                        >
+                          <DotsSixVerticalIcon />
+                        </button>
+                        <span className="settings-sortlist__name">
+                          {t(TOOLBAR_BUTTON_LABEL_KEYS[id] ?? id)}
+                        </span>
+                      </li>
+                    </Fragment>
+                  ))}
+                  {tbDrag && (
+                    <div className="settings-sortlist__indicator" style={{ top: tbDrag.y }} />
+                  )}
+                </ul>
               </div>
             )}
           </div>

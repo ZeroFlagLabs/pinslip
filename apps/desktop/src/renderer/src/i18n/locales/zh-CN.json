@@ -226,7 +226,15 @@
     "blankNoteShortcutCtrlShiftAltN": "Ctrl+Shift+Alt+N",
     "blankNoteShortcutCtrlAltInsert": "Ctrl+Alt+Insert",
     "blankNoteShortcutHint": "按下即在根目录新建一张空白便签并聚焦；落点跟随「新便签落点」选项",
-    "blankNoteShortcutRegisterFailed": "快捷键注册失败：可能已被其他应用占用，已恢复原设置"
+    "blankNoteShortcutRegisterFailed": "快捷键注册失败：可能已被其他应用占用，已恢复原设置",
+    "toolbarButtons": "工具栏按钮",
+    "toolbarButtonsHint": "拖拽调整顺序：前 8 个直接显示在便签底部工具栏，其余收进 ⋯ 菜单；窗口太窄时从末尾收起",
+    "toolbarButtonsOverflow": "以下收进 ⋯ 菜单",
+    "toolbarButtonsReset": "恢复默认顺序",
+    "toolbarButtonsResetTip": "恢复为默认的按钮顺序",
+    "toolbarDragTip": "拖拽调整顺序",
+    "toolbarZoomIn": "放大",
+    "toolbarZoomOut": "缩小"
   },
   "update": {
     "hintDev": "开发模式下不提供更新检查",

@@ -47,6 +47,9 @@ export const IPC = {
   SettingsGetOsDark: 'settings:get-os-dark',
   /** 界面语言切换广播（主进程→所有窗口）：参数为生效语言码，已开窗口即时跟进 */
   LanguageChanged: 'app:language-changed',
+  /** 高级定制变更广播（主进程→所有窗口）：参数为补齐后的完整对象（ResolvedAdvancedSettings），
+   *  便签窗口据此即时重排工具栏按钮 */
+  AdvancedChanged: 'advanced:changed',
   /** OS 深色模式变更广播（主进程→所有窗口）：参数为 shouldUseDarkColors 新值 */
   OsThemeChanged: 'settings:os-theme-changed',
   /** 笔记数据变更（保存/删除/速记）：渲染进程→主进程→主窗口广播 */

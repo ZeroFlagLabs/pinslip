@@ -226,7 +226,15 @@
     "blankNoteShortcutCtrlShiftAltN": "Strg+Umschalt+Alt+N",
     "blankNoteShortcutCtrlAltInsert": "Strg+Alt+Einfg",
     "blankNoteShortcutHint": "Erstellt per Tastendruck eine leere Notiz im Stammordner und fokussiert sie; die Position folgt der Option für neue Notizen",
-    "blankNoteShortcutRegisterFailed": "Tastenkürzel konnte nicht registriert werden: möglicherweise von einer anderen App belegt. Vorherige Einstellung wiederhergestellt"
+    "blankNoteShortcutRegisterFailed": "Tastenkürzel konnte nicht registriert werden: möglicherweise von einer anderen App belegt. Vorherige Einstellung wiederhergestellt",
+    "toolbarButtons": "Symbolleisten-Schaltflächen",
+    "toolbarButtonsHint": "Zum Umordnen ziehen: Die ersten 8 erscheinen direkt in der Notiz-Symbolleiste, der Rest wandert ins ⋯-Menü; bei schmalen Fenstern werden Schaltflächen von hinten ausgeblendet",
+    "toolbarButtonsOverflow": "Ab hier: im ⋯-Menü",
+    "toolbarButtonsReset": "Standardreihenfolge wiederherstellen",
+    "toolbarButtonsResetTip": "Stellt die Standardreihenfolge der Schaltflächen wieder her",
+    "toolbarDragTip": "Zum Umordnen ziehen",
+    "toolbarZoomIn": "Vergrößern",
+    "toolbarZoomOut": "Verkleinern"
   },
   "update": {
     "hintDev": "Update-Prüfung im Entwicklungsmodus nicht verfügbar",

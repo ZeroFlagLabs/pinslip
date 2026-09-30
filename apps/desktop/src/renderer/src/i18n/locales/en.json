@@ -226,7 +226,15 @@
     "blankNoteShortcutCtrlShiftAltN": "Ctrl+Shift+Alt+N",
     "blankNoteShortcutCtrlAltInsert": "Ctrl+Alt+Insert",
     "blankNoteShortcutHint": "Press to create a blank note in the root folder and focus it; placement follows the new note placement option",
-    "blankNoteShortcutRegisterFailed": "Failed to register the shortcut: it may be used by another app. Previous setting restored"
+    "blankNoteShortcutRegisterFailed": "Failed to register the shortcut: it may be used by another app. Previous setting restored",
+    "toolbarButtons": "Toolbar buttons",
+    "toolbarButtonsHint": "Drag to reorder: the first 8 show on the note toolbar, the rest move to the ⋯ menu; narrow windows hide buttons from the end",
+    "toolbarButtonsOverflow": "Below: moved to the ⋯ menu",
+    "toolbarButtonsReset": "Reset to default order",
+    "toolbarButtonsResetTip": "Restore the default button order",
+    "toolbarDragTip": "Drag to reorder",
+    "toolbarZoomIn": "Zoom in",
+    "toolbarZoomOut": "Zoom out"
   },
   "update": {
     "hintDev": "Update checks are unavailable in dev mode",
