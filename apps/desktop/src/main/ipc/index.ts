@@ -187,7 +187,7 @@ export function registerIpcHandlers({ windowManager, goProcess }: IpcContext): v
   // OS 深色模式事实：managerTheme='system' 时渲染层合成生效主题的输入之一
   ipcMain.handle(IPC.SettingsGetOsDark, () => nativeTheme.shouldUseDarkColors);
 
-  // 高级定制：整对象读取（缺省已补）；按键部分更新。trayIcon 变化立即
+  // 高级设置：整对象读取（缺省已补）；按键部分更新。trayIcon 变化立即
   // 应用（销毁/重建托盘），taskbarIcon 变化立即应用（主窗口 setSkipTaskbar，
   // 窗口未创建时由建窗读取补齐），blankNoteShortcut 变化原子重绑全局快捷键
   // （重绑失败抛错回渲染层，设置不持久化、旧绑定不丢），其余字段持久化即生效，

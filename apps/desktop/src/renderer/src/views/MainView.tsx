@@ -181,7 +181,7 @@ export default function MainView() {
   // 速记：落点模式（note 逐条 / daily 聚合到当日便签）+ 剪贴板带入开关（缺省开）
   const [quickMode, setQuickMode] = useState<'note' | 'daily'>('note');
   const [quickClipboard, setQuickClipboard] = useState(true);
-  // 高级定制：折叠区展开态（默认收起）+ 托盘/任务栏图标开关（缺省开）
+  // 高级设置：折叠区展开态（默认收起）+ 托盘/任务栏图标开关（缺省开）
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [trayIcon, setTrayIcon] = useState(true);
   const [taskbarIcon, setTaskbarIcon] = useState(true);
@@ -198,7 +198,7 @@ export default function MainView() {
   /** 空白便签全局快捷键（缺省 off 不注册）+ 注册失败提示态（新键被他应用占用时回滚选项） */
   const [blankNoteShortcut, setBlankNoteShortcut] = useState<BlankNoteShortcut>('off');
   const [blankNoteShortcutError, setBlankNoteShortcutError] = useState(false);
-  /** 工具栏按钮自定义顺序（高级定制拖拽排序；缺省 = 现状顺序）。
+  /** 工具栏按钮自定义顺序（高级设置拖拽排序；缺省 = 现状顺序）。
    *  ref 与 state 同源：拖拽松手结算时读现值，避开闭包旧值 */
   const [toolbarButtons, setToolbarButtonsState] = useState<string[]>(() => [
     ...TOOLBAR_BUTTON_DEFAULT_ORDER,
@@ -490,7 +490,7 @@ export default function MainView() {
     setMoveFilter('');
   }, [moveTarget]);
 
-  // 挂载即读高级定制：主题要在首帧就位（无「先浅色一闪再变深」窗口期），
+  // 挂载即读高级设置：主题要在首帧就位（无「先浅色一闪再变深」窗口期），
   // 托盘/任务栏图标、新便签落点与主题同一次 getAdvanced 调用
   useEffect(() => {
     window.api
@@ -665,14 +665,14 @@ export default function MainView() {
       .catch(() => setQuickClipboard(!next));
   }, [trashRetention, mcpEnabled, quickMode, quickClipboard]);
 
-  // 托盘图标开关（高级定制）：乐观切换，失败回滚；主进程 set 时立即销毁/重建托盘
+  // 托盘图标开关（高级设置）：乐观切换，失败回滚；主进程 set 时立即销毁/重建托盘
   const toggleTrayIcon = useCallback(() => {
     const next = !trayIcon;
     setTrayIcon(next);
     window.api.setAdvanced({ trayIcon: next }).catch(() => setTrayIcon(!next));
   }, [trayIcon]);
 
-  // 任务栏图标开关（高级定制）：乐观切换，失败回滚；主进程 set 时对主窗口
+  // 任务栏图标开关（高级设置）：乐观切换，失败回滚；主进程 set 时对主窗口
   // setSkipTaskbar 立即生效（仅主窗口，便签任务栏入口不受影响）
   const toggleTaskbarIcon = useCallback(() => {
     const next = !taskbarIcon;
@@ -680,7 +680,7 @@ export default function MainView() {
     window.api.setAdvanced({ taskbarIcon: next }).catch(() => setTaskbarIcon(!next));
   }, [taskbarIcon]);
 
-  // 新便签落点（高级定制）：乐观切换，失败回滚旧值
+  // 新便签落点（高级设置）：乐观切换，失败回滚旧值
   const changeNotePlacement = useCallback(
     (next: 'cascade' | 'beside-manager') => {
       const prev = notePlacement;
@@ -690,7 +690,7 @@ export default function MainView() {
     [notePlacement],
   );
 
-  // 管理器主题（高级定制）：乐观切换即改 data-theme，失败回滚旧值
+  // 管理器主题（高级设置）：乐观切换即改 data-theme，失败回滚旧值
   const changeManagerTheme = useCallback(
     (next: 'light' | 'dark' | 'system') => {
       const prev = managerTheme;
@@ -700,7 +700,7 @@ export default function MainView() {
     [managerTheme],
   );
 
-  // 空白便签快捷键（高级定制）：乐观切换；注册失败（新键被他应用占用）时
+  // 空白便签快捷键（高级设置）：乐观切换；注册失败（新键被他应用占用）时
   // main 抛错——回滚选项并提示（设置未持久化、旧绑定保持有效）
   const changeBlankNoteShortcut = useCallback(
     (next: BlankNoteShortcut) => {
@@ -1803,7 +1803,7 @@ export default function MainView() {
               <div className="settings-panel__hint">{t('mcp.hint')}</div>
             </div>
 
-            {/* 高级定制：抽屉底部可折叠二级区域（默认收起，视觉降级），
+            {/* 高级设置：抽屉底部可折叠二级区域（默认收起，视觉降级），
                 承载行为定制选项；全部选项缺省保持现状，即改即存即生效 */}
             <button
               className="settings-panel__section settings-panel__section--toggle"

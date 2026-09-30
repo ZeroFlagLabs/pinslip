@@ -325,7 +325,7 @@ export class WindowManager {
     this.mainWindow = createMainWindow();
     // 关闭主窗口 = 隐藏到托盘（保留列表滚动/搜索状态，托盘秒开）；
     // 应用真正退出时（quitting）放行关闭；
-    // 托盘关闭（高级定制）时没有「隐藏到托盘」的去处——同样放行真实关闭，
+    // 托盘关闭（高级设置）时没有「隐藏到托盘」的去处——同样放行真实关闭，
     // 全部窗口关闭后由 window-all-closed 触发退出
     this.mainWindow.on('close', (e) => {
       if (!this.quitting && getAdvanced().trayIcon) {
@@ -347,7 +347,7 @@ export class WindowManager {
     }
   }
 
-  /** 运行中切换任务栏图标（高级定制 taskbarIcon 即改即生效）：
+  /** 运行中切换任务栏图标（高级设置 taskbarIcon 即改即生效）：
    *  作用于全部窗口——主窗口与便签一起隐/显（onemast 原诉求：
    *  便签开多了挤满任务栏）。主窗口可能尚未创建（null）——
    *  建窗时各自按设置补齐 */

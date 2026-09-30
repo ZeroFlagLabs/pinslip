@@ -158,7 +158,7 @@ export interface RuntimeInfo {
  *  main/渲染共用的单一来源：渲染层只能选这些值，main 侧注册前再校验 */
 export type BlankNoteShortcut = 'off' | 'ctrl+alt+n' | 'ctrl+shift+alt+n' | 'ctrl+alt+insert';
 
-/** 高级定制选项（应用设置 settings.json 的 advanced 对象，main/渲染共用）。
+/** 高级设置选项（应用设置 settings.json 的 advanced 对象，main/渲染共用）。
  *  全部字段可选且有缺省值（缺省 = 简洁模型现状），新增选项 = 加字段，零新增 IPC */
 export interface AdvancedSettings {
   /** 系统托盘图标显隐（缺省 true）；关闭后全部窗口关闭时应用退出 */
@@ -179,7 +179,7 @@ export interface AdvancedSettings {
   toolbarButtons?: string[];
 }
 
-/** 补齐缺省值后的高级定制选项（settings:get-advanced 的返回形态） */
+/** 补齐缺省值后的高级设置选项（settings:get-advanced 的返回形态） */
 export type ResolvedAdvancedSettings = Required<AdvancedSettings>;
 
 /** 自动更新状态机（主进程唯一权威，渲染层只展示）：
@@ -247,13 +247,13 @@ export interface ElectronAPI {
   getLanguage(): Promise<{ preference: string; systemLocale: string }>;
   /** 持久化界面语言偏好（'system' 或具体语言码） */
   setLanguage(lang: string): Promise<void>;
-  /** 查询高级定制选项（整对象，缺省字段已由主进程补默认值） */
+  /** 查询高级设置选项（整对象，缺省字段已由主进程补默认值） */
   getAdvanced(): Promise<ResolvedAdvancedSettings>;
-  /** 按键部分更新高级定制选项（即改即存即生效），返回补齐后的完整对象 */
+  /** 按键部分更新高级设置选项（即改即存即生效），返回补齐后的完整对象 */
   setAdvanced(patch: AdvancedSettings): Promise<ResolvedAdvancedSettings>;
   /** 订阅界面语言切换广播（任一窗口改语言后，其他已开窗口即时跟进），返回取消订阅函数 */
   onLanguageChanged(cb: (lang: string) => void): () => void;
-  /** 订阅高级定制变更广播（set-advanced 后向全部窗口广播补齐后的完整对象，
+  /** 订阅高级设置变更广播（set-advanced 后向全部窗口广播补齐后的完整对象，
    *  便签窗口据此即时重排工具栏按钮），返回取消订阅函数 */
   onAdvancedChanged(cb: (advanced: ResolvedAdvancedSettings) => void): () => void;
   /** 查询 OS 深色模式事实（nativeTheme.shouldUseDarkColors） */

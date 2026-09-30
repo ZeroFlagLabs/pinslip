@@ -67,7 +67,7 @@ export function createNoteWindow({ noteId, index, alwaysOnTop, getOthers, snapHo
     frame: false,
     transparent: true,
     alwaysOnTop,
-    skipTaskbar: !getAdvanced().taskbarIcon, // 缺省进任务栏便于找回；高级定制关闭任务栏图标时便签同免（用户显式选择）
+    skipTaskbar: !getAdvanced().taskbarIcon, // 缺省进任务栏便于找回；高级设置关闭任务栏图标时便签同免（用户显式选择）
     title: '新便签', // 渲染进程加载后会用便签标题覆盖
     resizable: !collapsed,
     minimizable: true,

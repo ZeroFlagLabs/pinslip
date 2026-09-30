@@ -68,7 +68,7 @@ app.whenReady().then(() => {
     }
   });
   initMainI18n(); // 主进程 i18n（托盘/更新文案），须在 createTray 之前
-  // 托盘图标可在「高级定制」关闭：关闭时启动不创建托盘（运行中切换走 IPC 立即应用）
+  // 托盘图标可在「高级设置」关闭：关闭时启动不创建托盘（运行中切换走 IPC 立即应用）
   if (getAdvanced().trayIcon) createTray(windowManager);
   registerShortcuts(windowManager);
   initAutoStart(); // 打包后首次运行默认开启开机自启
@@ -91,7 +91,7 @@ app.whenReady().then(() => {
 });
 
 // 托盘常驻应用：托盘开启时所有窗口关闭不退出，由托盘菜单退出；
-// 托盘关闭（高级定制）时没有常驻入口，全部窗口关闭即退出（不做幽灵常驻）
+// 托盘关闭（高级设置）时没有常驻入口，全部窗口关闭即退出（不做幽灵常驻）
 app.on('window-all-closed', () => {
   if (!getAdvanced().trayIcon) app.quit();
 });

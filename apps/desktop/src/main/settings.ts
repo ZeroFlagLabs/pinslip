@@ -15,11 +15,11 @@ interface AppSettings {
   openNotes?: string[];
   /** 界面语言偏好：'system'（跟随系统，缺省）或具体语言码（zh-CN/en/ja/ko/es/de/fr） */
   language?: string;
-  /** 高级定制选项（全部字段有缺省值；旧 settings.json 无此字段时自然全缺省，零迁移） */
+  /** 高级设置选项（全部字段有缺省值；旧 settings.json 无此字段时自然全缺省，零迁移） */
   advanced?: AdvancedSettings;
 }
 
-/** 高级定制各字段缺省值（= 简洁模型现状）；新增选项必须在此登记缺省 */
+/** 高级设置各字段缺省值（= 简洁模型现状）；新增选项必须在此登记缺省 */
 const ADVANCED_DEFAULTS: ResolvedAdvancedSettings = {
   trayIcon: true,
   taskbarIcon: true,
@@ -81,7 +81,7 @@ export function setLanguage(lang: string): void {
   persist();
 }
 
-/** 高级定制选项（整对象返回，缺省字段补默认值；toolbarButtons 过校验——
+/** 高级设置选项（整对象返回，缺省字段补默认值；toolbarButtons 过校验——
  *  过滤未知 id/去重/缺项补末尾，旧配置遇到新版本新增按钮自动衔接） */
 export function getAdvanced(): ResolvedAdvancedSettings {
   const merged = { ...ADVANCED_DEFAULTS, ...(load().advanced ?? {}) };
@@ -89,7 +89,7 @@ export function getAdvanced(): ResolvedAdvancedSettings {
   return merged;
 }
 
-/** 按键部分更新高级定制选项（合并持久化，未提供的键保留原值）；
+/** 按键部分更新高级设置选项（合并持久化，未提供的键保留原值）；
  *  toolbarButtons 落盘前先过校验，脏数据不进 settings.json */
 export function setAdvanced(patch: AdvancedSettings): void {
   const clean: AdvancedSettings = { ...patch };

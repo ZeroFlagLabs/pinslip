@@ -30,7 +30,7 @@ export function createMainWindow(): BrowserWindow {
     resizable: true,
     maximizable: false,
     show: false,
-    // 任务栏图标显隐（高级定制，缺省开）；仅主窗口，便签任务栏入口不受影响
+    // 任务栏图标显隐（高级设置，缺省开）；仅主窗口，便签任务栏入口不受影响
     skipTaskbar: !getAdvanced().taskbarIcon,
     autoHideMenuBar: true,
     webPreferences: viewWebPreferences(),

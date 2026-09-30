@@ -1763,7 +1763,7 @@ input.sticky-note__title-input {
   margin-top: 0;
 }
 
-/* 「高级定制」折叠区头：与 section 同款灰字（视觉降级），整行可点击展开/收起 */
+/* 「高级设置」折叠区头：与 section 同款灰字（视觉降级），整行可点击展开/收起 */
 .settings-panel__section--toggle {
   display: flex;
   align-items: center;
@@ -1909,7 +1909,7 @@ input.sticky-note__title-input {
   border-color: var(--mv-border);
 }
 
-/* 工具栏按钮排序列表（高级定制）：指针拖拽换位，插入位指示线；
+/* 工具栏按钮排序列表（高级设置）：指针拖拽换位，插入位指示线；
    第 8/9 位间分隔线标注「超出进 ⋯ 菜单」 */
 .settings-sortlist {
   position: relative; /* 插入位指示线的定位容器 */

@@ -271,7 +271,7 @@ export default function NoteView() {
     return () => ro.disconnect();
   }, [reflowToolbar]);
 
-  // 工具栏按钮自定义顺序：挂载读取 + 订阅主进程广播（主窗口高级定制改序后
+  // 工具栏按钮自定义顺序：挂载读取 + 订阅主进程广播（主窗口高级设置改序后
   // 即时重排，无需重开）；广播载荷是补齐后的完整对象，渲染层再过一遍
   // sanitize 兜底（广播外的来源不入此通道）
   useEffect(() => {
