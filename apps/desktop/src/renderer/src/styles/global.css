@@ -2930,12 +2930,14 @@ input.sticky-note__title-input {
   user-select: none;
 }
 
-/* 噪点层：feTurbulence data-URI，无图片资源、无外部依赖 */
+/* 噪点层：feTurbulence data-URI，无图片资源、无外部依赖。
+   opacity 0.09：正常视距若有似无（防纯色塑料感），放大看有细颗粒——
+   0.05 实测淡到完全不可见，再高会显脏 */
 .export-stage::before {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.09'/%3E%3C/svg%3E");
   pointer-events: none;
 }
 
