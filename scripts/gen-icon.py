@@ -132,8 +132,15 @@ def main() -> None:
     ap.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', 'apps', 'desktop', 'resources', 'icon.png'))
     args = ap.parse_args()
     out = os.path.abspath(args.out)
-    render(args.size).save(out)
+    img = render(args.size)
+    img.save(out)
     print(f'[gen-icon] ok → {out} ({args.size}x{args.size})')
+    # macOS 菜单栏 template 图标：同轮廓的黑色剪影（系统按深浅菜单栏自动反色）
+    template = Image.new('RGBA', img.size, (0, 0, 0, 255))
+    template.putalpha(img.getchannel('A'))
+    t_out = os.path.join(os.path.dirname(out), 'iconTemplate.png')
+    template.save(t_out)
+    print(f'[gen-icon] ok → {t_out} (template)')
 
 
 if __name__ == '__main__':

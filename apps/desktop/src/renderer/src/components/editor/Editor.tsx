@@ -19,8 +19,26 @@ import { gfm, toggleStrikethroughCommand } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { nord } from '@milkdown/theme-nord';
+import { $prose } from '@milkdown/utils';
+import {
+  SearchQuery,
+  findNext as pmFindNext,
+  findPrev as pmFindPrev,
+  getSearchState,
+  replaceAll as pmReplaceAll,
+  replaceNext as pmReplaceNext,
+  search as pmSearch,
+  setSearchState,
+} from 'prosemirror-search';
+// 命令签名从真实命令推导（pnpm 严格隔离下跨包 type-only import prosemirror-state 也不可用）：
+// findNext/findPrev/replaceNext/replaceAll 同一 Command 签名
+type PmSearchCommand = typeof pmFindNext;
 import { createTaskCapableListItemView } from './task-item-view';
 import { createImageView, handleImagePaste } from './image-support';
+
+/** prosemirror-search 官方插件（命中装饰 + find/replace 命令）：
+ *  $prose 包装成 Milkdown 插件挂链，与 nodeViewCtx 直注同层机制，不动现有插件结构 */
+const pmSearchPlugin = $prose(() => pmSearch());
 
 export interface EditorProps {
   /** 初始 Markdown 内容（仅初始化时使用一次） */
@@ -41,6 +59,31 @@ interface ClipboardSliceLike {
   };
 }
 
+/** 搜索状态快照：total = 命中总数；active = 当前命中序号（1 起；0 = 无当前命中） */
+export interface FindStatus {
+  total: number;
+  active: number;
+}
+
+/** 统计当前 query 的命中总数与「选区恰为某命中」的序号（prosemirror-search 的
+ *  当前命中装饰以选区与命中区间完全重合判定，这里保持同一口径） */
+function countFindMatches(view: { state: Parameters<typeof getSearchState>[0] }): FindStatus {
+  const st = getSearchState(view.state);
+  if (!st || !st.query.valid) return { total: 0, active: 0 };
+  const { from, to } = view.state.selection;
+  let total = 0;
+  let active = 0;
+  let pos = 0;
+  for (;;) {
+    const r = st.query.findNext(view.state, pos);
+    if (!r) break;
+    total += 1;
+    if (r.from === from && r.to === to) active = total;
+    pos = Math.max(r.to, pos + 1); // 防零长命中死循环（与包内装饰构建同手法）
+  }
+  return { total, active };
+}
+
 /** 对外暴露的编辑器句柄 */
 export interface EditorHandle {
   /** 聚焦编辑器并把光标移到文末（窗口激活/点空白区时直接可输入）。
@@ -59,6 +102,25 @@ export interface EditorHandle {
   /** 整篇文档的纯文本（块间单换行，与剪贴板序列化行为一致）；
    *  编辑器未就绪时返回 null */
   getPlainText(): string | null;
+  /** 编辑器显示态 DOM 的 innerHTML（导出图片用：所见即所得，
+   *  含任务勾选态与 pinslip-img 协议图片 src）；编辑器未就绪时返回 null */
+  getHTML(): string | null;
+  /** 设置搜索 query（大小写不敏感、字面量、无正则——v1 写死的约定）并返回命中快照；
+   *  搜索词变化时自动选中下一处命中并滚入可视区；replace 仅随 query 存储，
+   *  供 replaceNext/replaceAll 取用。编辑器未就绪时返回 null */
+  setFindQuery(search: string, replace?: string): FindStatus | null;
+  /** 跳到下一处命中（到底回绕），返回命中快照 */
+  findNext(): FindStatus | null;
+  /** 跳到上一处命中（到顶回绕），返回命中快照 */
+  findPrev(): FindStatus | null;
+  /** 替换当前选中命中并选中下一处（无选中命中时仅选中下一处），返回命中快照 */
+  replaceNext(): FindStatus | null;
+  /** 替换全部命中，返回命中快照（替换后通常归零） */
+  replaceAll(): FindStatus | null;
+  /** 关闭搜索：清空 query（命中装饰随之消失）并把焦点还回编辑器（不动光标位置） */
+  closeFind(): void;
+  /** 当前选区的单行纯文本（唤出搜索条时带入查询框）；空选区/跨块选区/未就绪返回 '' */
+  getSelectedText(): string;
 }
 
 const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEditor(
@@ -69,7 +131,19 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
 
   useImperativeHandle(
     ref,
-    () => ({
+    () => {
+      /** 执行 prosemirror-search 命令并返回最新命中快照；编辑器未就绪返回 null */
+      const runFind = (cmd: PmSearchCommand): FindStatus | null => {
+        if (loading) return null;
+        let status: FindStatus | null = null;
+        getEditor().action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          cmd(view.state, view.dispatch as (tr: unknown) => void, view);
+          status = countFindMatches(view);
+        });
+        return status;
+      };
+      return {
       focusEnd() {
         if (loading) return false;
         getEditor().action((ctx) => {
@@ -209,7 +283,73 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
         });
         return text;
       },
-    }),
+      getHTML() {
+        if (loading) return null;
+        let html = '';
+        getEditor().action((ctx) => {
+          html = (ctx.get(editorViewCtx).dom as HTMLElement).innerHTML;
+        });
+        return html;
+      },
+      setFindQuery(search, replace = '') {
+        if (loading) return null;
+        let status: FindStatus | null = null;
+        getEditor().action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const query = new SearchQuery({ search, replace });
+          const prev = getSearchState(view.state);
+          if (prev && prev.query.eq(query)) {
+            status = countFindMatches(view);
+            return;
+          }
+          view.dispatch(setSearchState(view.state.tr, query));
+          // 只有搜索词变化才跳命中（输入替换词不应挪动选区）；findNext 命令
+          // 自带 scrollIntoView，当前命中装饰随选区重合自动加强
+          if (query.valid && (!prev || prev.query.search !== search)) {
+            pmFindNext(view.state, view.dispatch, view);
+          }
+          status = countFindMatches(view);
+        });
+        return status;
+      },
+      findNext() {
+        return runFind(pmFindNext);
+      },
+      findPrev() {
+        return runFind(pmFindPrev);
+      },
+      replaceNext() {
+        return runFind(pmReplaceNext);
+      },
+      replaceAll() {
+        return runFind(pmReplaceAll);
+      },
+      closeFind() {
+        if (loading) return;
+        getEditor().action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const cur = getSearchState(view.state);
+          if (cur && cur.query.valid) {
+            view.dispatch(setSearchState(view.state.tr, new SearchQuery({ search: '' })));
+          }
+          (view.dom as HTMLElement).focus(); // 焦点还回编辑器，光标留在原处
+        });
+      },
+      getSelectedText() {
+        if (loading) return '';
+        let text = '';
+        getEditor().action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const { from, to, empty } = view.state.selection;
+          if (empty) return;
+          const raw = view.state.doc.textBetween(from, to, '\n');
+          // 跨块选区不带入（编辑器惯例：单行选区才作查询种子）
+          if (!raw.includes('\n')) text = raw.trim().slice(0, 100);
+        });
+        return text;
+      },
+      };
+    },
     [loading, getEditor],
   );
 
@@ -252,7 +392,8 @@ const MilkdownEditor = forwardRef<EditorHandle, EditorProps>(function MilkdownEd
       .use(commonmark)
       .use(gfm)
       .use(history)
-      .use(listener),
+      .use(listener)
+      .use(pmSearchPlugin),
   []);
 
   return <Milkdown />;

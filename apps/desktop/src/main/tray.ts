@@ -13,7 +13,12 @@ let trayRef: Tray | null = null;
 let windowManagerRef: WindowManager | null = null;
 
 function loadTrayIcon(): Electron.NativeImage {
-  const iconPath = join(app.getAppPath(), 'resources', 'icon.png');
+  // macOS 菜单栏惯例是 template 黑白图标（随深浅菜单栏自动反色）：
+  // 优先用 iconTemplate.png（icon.png 的黑色剪影版），彩色原图仅作回退
+  const isTemplate = process.platform === 'darwin' && existsSync(join(app.getAppPath(), 'resources', 'iconTemplate.png'));
+  const iconPath = isTemplate
+    ? join(app.getAppPath(), 'resources', 'iconTemplate.png')
+    : join(app.getAppPath(), 'resources', 'icon.png');
   let img: Electron.NativeImage | null = null;
   if (existsSync(iconPath)) {
     const loaded = nativeImage.createFromPath(iconPath);
@@ -29,6 +34,7 @@ function loadTrayIcon(): Electron.NativeImage {
       scaleFactor: 2,
       buffer: img.resize({ width: 36, height: 36, quality: 'best' }).toPNG(),
     });
+    if (isTemplate) small.setTemplateImage(true); // 声明为模板图：系统按菜单栏深浅自动反白/反黑
     return small;
   }
   return img;

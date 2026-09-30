@@ -75,4 +75,10 @@ export const IPC = {
   UpdateState: 'update:state',
   /** 用系统浏览器打开下载页（更新检查失败时的手动下载兜底） */
   UpdateOpenDownload: 'update:open-download',
+  /** 导出便签为图片（渲染→主进程，带 ExportImagePayload；主进程开隐藏离屏窗渲染后截图） */
+  ExportImage: 'export:image',
+  /** 导出载荷下发（主进程→导出窗，did-finish-load 后发送），参数 ExportImagePayload */
+  ExportPayload: 'export:payload',
+  /** 导出窗渲染就绪上报（导出窗→主进程），参数为内容高度（DIP） */
+  ExportReady: 'export:ready',
 } as const;

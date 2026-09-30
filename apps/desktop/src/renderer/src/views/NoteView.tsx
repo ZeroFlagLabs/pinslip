@@ -25,6 +25,8 @@ import MagnifyingGlassMinusIcon from '~icons/ph/magnifying-glass-minus';
 import MagnifyingGlassPlusIcon from '~icons/ph/magnifying-glass-plus';
 import CopyIcon from '~icons/ph/copy';
 import CheckIcon from '~icons/ph/check';
+import ExportIcon from '~icons/ph/export';
+import FloppyDiskIcon from '~icons/ph/floppy-disk';
 import ArrowsClockwiseIcon from '~icons/ph/arrows-clockwise';
 import WarningCircleFillIcon from '~icons/ph/warning-circle-fill';
 import PencilSimpleIcon from '~icons/ph/pencil-simple';
@@ -32,6 +34,7 @@ import ArrowCounterClockwiseIcon from '~icons/ph/arrow-counter-clockwise';
 import PinIcon from '../components/icons/PinIcon';
 import Editor from '../components/editor/Editor';
 import type { EditorHandle } from '../components/editor/Editor';
+import FindBar from '../components/editor/FindBar';
 import ConflictResolver from '../components/ConflictResolver';
 import { toMarkdownImageSrc } from '../components/editor/image-support';
 import { attachmentsApi, SUPPORTED_IMAGE_MIME_TYPES } from '../api/attachments';
@@ -142,6 +145,13 @@ export default function NoteView() {
   const [toast, setToast] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** 便签内搜索条：Ctrl+F 打开；findReplaceOpen = 替换行展开（Ctrl+H 直接展开） */
+  const [findOpen, setFindOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  /** 导出为图片：菜单开关 + 进行中断言（主进程同一时间只允许一次导出）+ 复制成功 ✓ 反馈 */
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exported, setExported] = useState(false);
   /** ＋新建落点菜单（便签在子文件夹时才有：同文件夹 / 根目录） */
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -195,6 +205,13 @@ export default function NoteView() {
     if (!ok && attempt < 10) {
       setTimeout(() => focusEditorIfIdle(attempt + 1), 120);
     }
+  }, []);
+
+  /** 关闭搜索条：卸载浮层 + 清空命中高亮 + 焦点还回编辑器（closeFind 内部幂等） */
+  const closeFindBar = useCallback(() => {
+    setFindOpen(false);
+    setFindReplaceOpen(false);
+    editorRef.current?.closeFind();
   }, []);
 
   /** 工具栏宽度自适应：溢出时按优先级从低到高逐级藏（先编辑区按钮，再分类区的
@@ -279,6 +296,7 @@ export default function NoteView() {
       setFolderPanelOpen(false);
       setGroupMenuOpen(false);
       setTitleMenuOpen(false);
+      setExportMenuOpen(false);
       setConfirmDelete(false);
     };
     window.addEventListener('focus', onFocus);
@@ -448,6 +466,28 @@ export default function NoteView() {
    *  true 时编辑区整换 ConflictResolver 原文解决视图（Milkdown 会把 markers 渲染成标题/引用），
    *  解决保存后 markers 消失，自动切回 Milkdown */
   const hasConflict = useMemo(() => hasConflictMarkers(content), [content]);
+
+  // 便签内搜索：Ctrl+F 唤出搜索条、Ctrl+H 唤出并展开替换行（窗口内按键，
+  // 与全局快捷键无交集：全局只有速记 Ctrl+Shift+N 与空白便签 Ctrl+Alt+N 系）。
+  // 搜索条已打开时的聚焦/替换行聚焦由 FindBar 自己的窗口监听处理
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== 'f' && k !== 'h') return;
+      if (collapsed || hasConflict) return; // 折叠/冲突解决（只读）态不开放搜索
+      e.preventDefault();
+      setFindOpen(true);
+      if (k === 'h') setFindReplaceOpen(true);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [collapsed, hasConflict]);
+
+  // 折叠/冲突态不支持搜索条：进入即关（渲染条件同步拦截，双保险）
+  useEffect(() => {
+    if ((collapsed || hasConflict) && findOpen) closeFindBar();
+  }, [collapsed, hasConflict, findOpen, closeFindBar]);
 
   // 窗口标题同步便签标题（任务栏/Alt+Tab 可辨识）
   useEffect(() => {
@@ -636,6 +676,31 @@ export default function NoteView() {
       });
     },
     [collapsed, hasConflict, hasFilePayload, supportedDropFiles],
+  );
+
+  /** 导出为图片：载荷取编辑器显示态 DOM（句柄 getHTML，含未落盘改动）+ 标题/颜色/标签；
+   *  主进程开隐藏离屏窗渲染构图后截图，复制写剪贴板/另存弹对话框 */
+  const doExport = useCallback(
+    (action: 'copy' | 'save') => {
+      if (exportBusy) return;
+      const html = editorRef.current?.getHTML();
+      if (html == null) return; // 编辑器未就绪：静默不导出（按钮随加载完成即可用）
+      setExportBusy(true);
+      setExportMenuOpen(false);
+      setMenuOpen(false); // 从 ⋯ 菜单找回入口触发时同步收菜单
+      window.api
+        .exportNoteImage({ action, html, color: color || 'yellow', title: displayTitle, tags })
+        .then((res) => {
+          if (res.ok && !res.canceled && action === 'copy') {
+            setExported(true);
+            setTimeout(() => setExported(false), 1200);
+          }
+          if (!res.ok) console.error('[export] failed:', res.error);
+        })
+        .catch(() => {})
+        .finally(() => setExportBusy(false));
+    },
+    [exportBusy, color, displayTitle, tags],
   );
 
   /** 复制全部正文到剪贴板；成功后图标短暂变 ✓ 反馈。
@@ -927,6 +992,23 @@ export default function NoteView() {
       act: () => stepZoom(-ZOOM_STEP),
       disabled: zoomPct <= ZOOM_MIN,
     },
+    {
+      // 导出为图片放编辑区末尾:宽度收敛时最先被藏(hiddenEdit≥1),
+      // 两条目在 ⋯ 菜单找回
+      key: 'export',
+      tip: exported ? t('note.copied') : t('note.exportImage'),
+      icon: exported ? <CheckIcon /> : <ExportIcon />,
+      act: () => {
+        setPaletteOpen(false);
+        setMenuOpen(false);
+        setNewMenuOpen(false);
+        setTagPanelOpen(false);
+        setFolderPanelOpen(false);
+        setConfirmDelete(false);
+        setExportMenuOpen((v) => !v);
+      },
+      disabled: exportBusy,
+    },
   ] as const;
   const visibleEditButtons = editButtons.slice(0, editButtons.length - hiddenEdit);
 
@@ -937,7 +1019,7 @@ export default function NoteView() {
   }, [allFolders, folderFilter]);
 
   const overlayOpen =
-    paletteOpen || menuOpen || newMenuOpen || tagPanelOpen || folderPanelOpen || groupMenuOpen || titleMenuOpen;
+    paletteOpen || menuOpen || newMenuOpen || tagPanelOpen || folderPanelOpen || groupMenuOpen || titleMenuOpen || exportMenuOpen;
 
   return (
     <>
@@ -1193,6 +1275,19 @@ export default function NoteView() {
           </div>
         ))}
 
+      {/* 便签内搜索条：编辑器区域顶部浮层（absolute，不占标题栏）。
+          有外部修改横幅时 top 下移 26px 避让（横幅 ~26px 高）；折叠/冲突态不渲染 */}
+      {!collapsed && !hasConflict && findOpen && (
+        <FindBar
+          editorRef={editorRef}
+          replaceOpen={findReplaceOpen}
+          topOffset={externalUpdate !== null ? 60 : 34}
+          onToggleReplace={() => setFindReplaceOpen((v) => !v)}
+          onOpenReplace={() => setFindReplaceOpen(true)}
+          onClose={closeFindBar}
+        />
+      )}
+
       {/* 自动重载完成的轻提示（折叠态不弹） */}
       {!collapsed && toast && <div className="sticky-note__toast">{toast}</div>}
 
@@ -1209,6 +1304,7 @@ export default function NoteView() {
             setFolderPanelOpen(false);
             setGroupMenuOpen(false);
             setTitleMenuOpen(false);
+            setExportMenuOpen(false);
             setConfirmDelete(false);
           }}
         />
@@ -1532,11 +1628,53 @@ export default function NoteView() {
         </div>
       )}
 
-      {/* ⋯ 菜单（被优先级收起的缩放按钮在这里找回：编辑区尾部两项，
-          hiddenEdit≥1 藏 A−，≥2 连 A＋ 一起藏） */}
+      {/* 导出为图片菜单(工具栏导出按钮触发;左对齐锚定编辑区) */}
+      {exportMenuOpen && (
+        <div className="sticky-note__menu sticky-note__menu--export">
+          <button
+            className="sticky-note__menu-item"
+            disabled={exportBusy}
+            onClick={() => doExport('copy')}
+          >
+            <CopyIcon />
+            {t('note.exportCopy')}
+          </button>
+          <button
+            className="sticky-note__menu-item"
+            disabled={exportBusy}
+            onClick={() => doExport('save')}
+          >
+            <FloppyDiskIcon />
+            {t('note.exportSave')}
+          </button>
+        </div>
+      )}
+
+      {/* ⋯ 菜单（被优先级收起的按钮在这里找回：编辑区从尾部藏起，
+          hiddenEdit≥1 藏导出、≥2 藏 A−、≥3 连 A＋ 一起藏） */}
       {menuOpen && (
         <div className="sticky-note__menu">
-          {hiddenEdit >= 2 && (
+          {hiddenEdit >= 1 && (
+            <>
+              <button
+                className="sticky-note__menu-item"
+                disabled={exportBusy}
+                onClick={() => doExport('copy')}
+              >
+                <CopyIcon />
+                {t('note.exportCopy')}
+              </button>
+              <button
+                className="sticky-note__menu-item"
+                disabled={exportBusy}
+                onClick={() => doExport('save')}
+              >
+                <FloppyDiskIcon />
+                {t('note.exportSave')}
+              </button>
+            </>
+          )}
+          {hiddenEdit >= 3 && (
             <button
               className="sticky-note__menu-item"
               disabled={zoomPct >= ZOOM_MAX}
@@ -1546,7 +1684,7 @@ export default function NoteView() {
               {zoomInTip}
             </button>
           )}
-          {hiddenEdit >= 1 && (
+          {hiddenEdit >= 2 && (
             <button
               className="sticky-note__menu-item"
               disabled={zoomPct <= ZOOM_MIN}

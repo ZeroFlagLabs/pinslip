@@ -18,7 +18,9 @@
   },
   "dialog": {
     "chooseVaultTitle": "ノートの保存場所を選択",
-    "chooseVaultButton": "このフォルダーを選択"
+    "chooseVaultButton": "このフォルダーを選択",
+    "exportSaveTitle": "ノート画像の書き出し",
+    "exportSaveButton": "保存"
   },
   "tabs": {
     "list": "リスト",
@@ -89,6 +91,21 @@
     "renameNote": "ノート名を変更",
     "restoreAutoTitle": "自動タイトルに戻す",
     "renamePlaceholder": "ノートのタイトル",
+    "exportImage": "画像として書き出す",
+    "exportCopy": "画像としてコピー",
+    "exportSave": "PNG として保存…",
+    "find": {
+      "placeholder": "ノートを検索…",
+      "prev": "前へ",
+      "next": "次へ",
+      "close": "閉じる",
+      "expandReplace": "置換を表示",
+      "collapseReplace": "置換を隠す",
+      "replace": "置換",
+      "replaceAll": "すべて置換",
+      "replacePlaceholder": "置換後…",
+      "noResult": "一致なし"
+    },
     "zoomOut": "縮小（現在 {{pct}}%）",
     "zoomIn": "拡大（現在 {{pct}}%）",
     "zoomOutLimit": "最小倍率です（50%）",

@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import NoteView from './views/NoteView';
 import QuickCaptureView from './views/QuickCaptureView';
 import MainView from './views/MainView';
+import ExportView from './views/ExportView';
 
 /** 每个窗口通过 hash 路由加载对应视图（见 src/main/windows/view-helper.ts） */
 export default function App() {
@@ -10,6 +11,7 @@ export default function App() {
       <Route path="/" element={<MainView />} />
       <Route path="/note/:noteId" element={<NoteView />} />
       <Route path="/quick-capture" element={<QuickCaptureView />} />
+      <Route path="/export" element={<ExportView />} />
     </Routes>
   );
 }

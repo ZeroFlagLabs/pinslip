@@ -18,7 +18,9 @@
   },
   "dialog": {
     "chooseVaultTitle": "Speicherort für Notizen wählen",
-    "chooseVaultButton": "Diesen Ordner wählen"
+    "chooseVaultButton": "Diesen Ordner wählen",
+    "exportSaveTitle": "Notizbild exportieren",
+    "exportSaveButton": "Speichern"
   },
   "tabs": {
     "list": "Liste",
@@ -89,10 +91,25 @@
     "renameNote": "Notiz umbenennen",
     "restoreAutoTitle": "Automatischen Titel wiederherstellen",
     "renamePlaceholder": "Notiztitel",
+    "find": {
+      "placeholder": "Notiz durchsuchen…",
+      "prev": "Vorheriger",
+      "next": "Nächster",
+      "close": "Schließen",
+      "expandReplace": "Ersetzen einblenden",
+      "collapseReplace": "Ersetzen ausblenden",
+      "replace": "Ersetzen",
+      "replaceAll": "Alle ersetzen",
+      "replacePlaceholder": "Ersetzen durch…",
+      "noResult": "Keine Treffer"
+    },
     "zoomOut": "Verkleinern (aktuell {{pct}} %)",
     "zoomIn": "Vergrößern (aktuell {{pct}} %)",
     "zoomOutLimit": "Minimale Vergrößerung erreicht (50 %)",
-    "zoomInLimit": "Maximale Vergrößerung erreicht (200 %)"
+    "zoomInLimit": "Maximale Vergrößerung erreicht (200 %)",
+    "exportImage": "Als Bild exportieren",
+    "exportCopy": "Als Bild kopieren",
+    "exportSave": "Als PNG speichern…"
   },
   "list": {
     "allNotes": "Alle Notizen ({{count}})",

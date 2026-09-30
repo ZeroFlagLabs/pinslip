@@ -18,7 +18,9 @@
   },
   "dialog": {
     "chooseVaultTitle": "노트 저장 위치 선택",
-    "chooseVaultButton": "이 폴더 선택"
+    "chooseVaultButton": "이 폴더 선택",
+    "exportSaveTitle": "메모 이미지보내기",
+    "exportSaveButton": "저장"
   },
   "tabs": {
     "list": "목록",
@@ -89,10 +91,25 @@
     "renameNote": "메모 이름 바꾸기",
     "restoreAutoTitle": "자동 제목으로 복원",
     "renamePlaceholder": "메모 제목",
+    "find": {
+      "placeholder": "메모 검색…",
+      "prev": "이전",
+      "next": "다음",
+      "close": "닫기",
+      "expandReplace": "바꾸기 표시",
+      "collapseReplace": "바꾸기 숨기기",
+      "replace": "바꾸기",
+      "replaceAll": "모두 바꾸기",
+      "replacePlaceholder": "바꿀 내용…",
+      "noResult": "일치 없음"
+    },
     "zoomOut": "축소(현재 {{pct}}%)",
     "zoomIn": "확대(현재 {{pct}}%)",
     "zoomOutLimit": "최소 배율입니다(50%)",
-    "zoomInLimit": "최대 배율입니다(200%)"
+    "zoomInLimit": "최대 배율입니다(200%)",
+    "exportImage": "이미지로보내기",
+    "exportCopy": "이미지로 복사",
+    "exportSave": "PNG로 저장…"
   },
   "list": {
     "allNotes": "모든 메모 ({{count}})",

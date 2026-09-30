@@ -18,7 +18,9 @@
   },
   "dialog": {
     "chooseVaultTitle": "Choose where to store your notes",
-    "chooseVaultButton": "Select this folder"
+    "chooseVaultButton": "Select this folder",
+    "exportSaveTitle": "Export note image",
+    "exportSaveButton": "Save"
   },
   "tabs": {
     "list": "List",
@@ -89,6 +91,21 @@
     "renameNote": "Rename note",
     "restoreAutoTitle": "Restore auto title",
     "renamePlaceholder": "Note title",
+    "exportImage": "Export as image",
+    "exportCopy": "Copy as image",
+    "exportSave": "Save as PNG…",
+    "find": {
+      "placeholder": "Search note…",
+      "prev": "Previous",
+      "next": "Next",
+      "close": "Close",
+      "expandReplace": "Show replace",
+      "collapseReplace": "Hide replace",
+      "replace": "Replace",
+      "replaceAll": "Replace all",
+      "replacePlaceholder": "Replace with…",
+      "noResult": "No matches"
+    },
     "zoomOut": "Zoom out (now {{pct}}%)",
     "zoomIn": "Zoom in (now {{pct}}%)",
     "zoomOutLimit": "Already at minimum zoom (50%)",

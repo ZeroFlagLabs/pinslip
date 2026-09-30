@@ -105,7 +105,8 @@ app.on('before-quit', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    windowManager.showMainWindow();
-  }
+  // macOS Dock 点击的惯例是「带回应用窗口」。主窗口的关闭是隐藏不是销毁,
+  // 旧逻辑只在 0 窗口时重开——隐藏中的主窗口让 length>0,Dock 点击无反应
+  // (onemast 反馈)。activate 是 macOS 语义(Windows 不触发),直接无条件带回。
+  windowManager?.showMainWindow();
 });

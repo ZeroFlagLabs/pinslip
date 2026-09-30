@@ -2,9 +2,10 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electro
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { IPC } from '../../shared/ipc-channels';
-import type { AdvancedSettings, RuntimeInfo } from '../../shared/types';
+import type { AdvancedSettings, ExportImagePayload, RuntimeInfo } from '../../shared/types';
 import type { WindowManager } from '../windows/window-manager';
 import type { GoProcess } from '../services/go-process';
+import { runExport } from '../windows/export-window';
 import { getVaultPath, setVaultPath, getLanguage, setLanguage, getAdvanced, setAdvanced } from '../settings';
 import { getAutoStart, setAutoStart } from '../autostart';
 import { setMainLanguage, tMain } from '../i18n';
@@ -227,4 +228,10 @@ export function registerIpcHandlers({ windowManager, goProcess }: IpcContext): v
   ipcMain.handle(IPC.UpdateOpenDownload, async () => {
     await shell.openExternal('https://github.com/homerious/pinslip/releases/latest');
   });
+
+  // 导出便签为图片：主进程开隐藏离屏窗渲染 ExportView 后截图
+  // （copy 写剪贴板 / save 弹保存对话框写盘），全程不触碰真实便签窗口
+  ipcMain.handle(IPC.ExportImage, (event, payload: ExportImagePayload) =>
+    runExport(payload, event),
+  );
 }

@@ -190,6 +190,24 @@ export type UpdateState =
   | { status: 'latest'; version: string }
   | { status: 'error'; message: string };
 
+/** 导出便签为图片的请求载荷（渲染→主进程 export:image）。
+ *  html 为编辑器显示态 DOM 的 innerHTML（所见即所得：任务勾选态、图片协议 src） */
+export interface ExportImagePayload {
+  /** copy = 写系统剪贴板；save = 弹保存对话框写盘 */
+  action: 'copy' | 'save';
+  html: string;
+  color: NoteColor;
+  title: string;
+  tags: string[];
+}
+
+/** 导出结果：canceled = 用户在保存对话框取消（不构成失败提示） */
+export interface ExportImageResult {
+  ok: boolean;
+  error?: string;
+  canceled?: boolean;
+}
+
 /** preload 暴露到 window.api 的接口契约（唯一 IPC 出口） */
 export interface ElectronAPI {
   getRuntimeInfo(): Promise<RuntimeInfo>;
@@ -264,4 +282,11 @@ export interface ElectronAPI {
   onUpdateState(cb: (state: UpdateState) => void): () => void;
   /** 用系统浏览器打开下载页（更新检查失败时的手动下载兜底） */
   openDownloadPage(): Promise<void>;
+  /** 导出便签为图片：copy 写剪贴板 / save 弹保存对话框写盘；
+   *  主进程开隐藏离屏窗渲染，全程不触碰真实便签窗口几何 */
+  exportNoteImage(payload: ExportImagePayload): Promise<ExportImageResult>;
+  /** 订阅导出载荷下发（仅隐藏导出窗的 ExportView 使用），返回取消订阅函数 */
+  onExportPayload(cb: (payload: ExportImagePayload) => void): () => void;
+  /** 导出窗上报渲染就绪与内容高度（主进程据此 setContentSize 后截图） */
+  exportReady(height: number): void;
 }

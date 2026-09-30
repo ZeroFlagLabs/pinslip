@@ -20,6 +20,7 @@ files:
   - out/**
   - package.json
   - resources/icon.png
+  - resources/iconTemplate.png
   - resources/icon.ico
 
 # Go 服务二进制 → 安装目录 resources/service/

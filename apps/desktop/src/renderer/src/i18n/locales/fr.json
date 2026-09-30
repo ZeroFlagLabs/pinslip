@@ -18,7 +18,9 @@
   },
   "dialog": {
     "chooseVaultTitle": "Choisissez où stocker vos notes",
-    "chooseVaultButton": "Sélectionner ce dossier"
+    "chooseVaultButton": "Sélectionner ce dossier",
+    "exportSaveTitle": "Exporter l'image de la note",
+    "exportSaveButton": "Enregistrer"
   },
   "tabs": {
     "list": "Liste",
@@ -89,10 +91,25 @@
     "renameNote": "Renommer la note",
     "restoreAutoTitle": "Restaurer le titre automatique",
     "renamePlaceholder": "Titre de la note",
+    "find": {
+      "placeholder": "Rechercher dans la note…",
+      "prev": "Précédent",
+      "next": "Suivant",
+      "close": "Fermer",
+      "expandReplace": "Afficher le remplacement",
+      "collapseReplace": "Masquer le remplacement",
+      "replace": "Remplacer",
+      "replaceAll": "Tout remplacer",
+      "replacePlaceholder": "Remplacer par…",
+      "noResult": "Aucune correspondance"
+    },
     "zoomOut": "Réduire (actuellement {{pct}} %)",
     "zoomIn": "Agrandir (actuellement {{pct}} %)",
     "zoomOutLimit": "Zoom minimal atteint (50 %)",
-    "zoomInLimit": "Zoom maximal atteint (200 %)"
+    "zoomInLimit": "Zoom maximal atteint (200 %)",
+    "exportImage": "Exporter en image",
+    "exportCopy": "Copier en image",
+    "exportSave": "Enregistrer en PNG…"
   },
   "list": {
     "allNotes": "Toutes les notes ({{count}})",

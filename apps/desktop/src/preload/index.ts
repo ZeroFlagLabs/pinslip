@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../shared/ipc-channels';
-import type { ElectronAPI, GroupState, UpdateState } from '../shared/types';
+import type { ElectronAPI, ExportImagePayload, GroupState, UpdateState } from '../shared/types';
 
 // preload 是主进程与渲染进程之间的唯一桥梁：
 // 这里实现的 ElectronAPI 就是渲染进程能触达主进程的全部能力白名单。
@@ -68,6 +68,14 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener(IPC.UpdateState, listener);
   },
   openDownloadPage: () => ipcRenderer.invoke(IPC.UpdateOpenDownload),
+  exportNoteImage: (payload) => ipcRenderer.invoke(IPC.ExportImage, payload),
+  onExportPayload: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: ExportImagePayload): void =>
+      cb(payload);
+    ipcRenderer.on(IPC.ExportPayload, listener);
+    return () => ipcRenderer.removeListener(IPC.ExportPayload, listener);
+  },
+  exportReady: (height) => ipcRenderer.send(IPC.ExportReady, height),
 };
 
 contextBridge.exposeInMainWorld('api', api);
