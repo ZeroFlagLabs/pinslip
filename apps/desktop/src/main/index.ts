@@ -7,7 +7,7 @@ import { GoProcess, VAULT_NOT_SET } from './services/go-process';
 import { registerIpcHandlers } from './ipc';
 import { createTray } from './tray';
 import { initAutoStart } from './autostart';
-import { getVaultPath, getAdvanced } from './settings';
+import { getVaultPath, getAdvanced, getOpenNotes } from './settings';
 import { initMainI18n } from './i18n';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { startVaultWatch, stopVaultWatch } from './services/vault-watch';
@@ -28,7 +28,9 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 app.on('second-instance', () => {
-  windowManager?.showMainWindow();
+  if (getOpenNotes().length === 0 || !getAdvanced().trayIcon) {
+    windowManager?.showMainWindow();
+  }
 });
 
 app.whenReady().then(() => {
@@ -77,7 +79,11 @@ app.whenReady().then(() => {
   // 外部文件变更监听：同步盘/手动改 vault 时主界面列表自动刷新（未设保险库时为 no-op）
   startVaultWatch(() => windowManager.broadcastNotesChanged());
 
-  windowManager.showMainWindow();
+  const hasOpenNotes = getOpenNotes().length > 0;
+
+  if (!hasOpenNotes || !getAdvanced().trayIcon) {
+    windowManager.showMainWindow();
+  }
   // 会话恢复：已设保险库时，重新打开上次退出时开着的便签
   if (getVaultPath()) {
     windowManager.restoreNoteWindows().catch((err) =>
