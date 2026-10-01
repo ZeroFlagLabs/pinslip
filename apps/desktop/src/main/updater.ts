@@ -15,6 +15,9 @@ import type { UpdateState } from '../shared/types';
 
 const { autoUpdater } = electronUpdater;
 
+const UPDATES_DISABLED = true;
+const UPDATES_DISABLED_MESSAGE = 'Updates are disabled in this modified build.';
+
 /** GitHub 主源（与 electron-builder.yml 的 publish 配置一致，每次检查前重置） */
 const GITHUB_FEED = { provider: 'github' as const, owner: 'homerious', repo: 'pinslip' };
 
@@ -55,6 +58,10 @@ function doCheck(silent: boolean): void {
 
 /** 手动检查更新（设置页按钮）。dev 环境没有更新元信息，返回提示性错误态而非静默 */
 export function checkForUpdate(): void {
+  if (UPDATES_DISABLED) {
+    setState({ status: 'error', message: UPDATES_DISABLED_MESSAGE });
+    return;
+  }
   if (!app.isPackaged) {
     setState({ status: 'error', message: tMain('update.devUnsupported') });
     return;
@@ -64,6 +71,7 @@ export function checkForUpdate(): void {
 
 /** 退出并安装。仅 downloaded 态有意义；autoInstallOnAppQuit 默认 true，直接退出 */
 export function quitAndInstall(): void {
+  if (UPDATES_DISABLED) return;
   if (!app.isPackaged) return;
   autoUpdater.quitAndInstall();
 }
@@ -74,6 +82,7 @@ export function getUpdateState(): UpdateState {
 
 /** 装配：注册事件监听 + 启动后静默检查一次（延迟 15s，避开启动竞速与首屏加载） */
 export function initAutoUpdater(): void {
+  if (UPDATES_DISABLED) return;
   if (!app.isPackaged || initialized) return;
   initialized = true;
 
