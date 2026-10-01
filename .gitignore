@@ -27,3 +27,5 @@ Thumbs.db
 # 编辑器
 .idea/
 .vscode/
+
+/Modified Release/
