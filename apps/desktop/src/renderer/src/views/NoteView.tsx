@@ -141,6 +141,9 @@ export default function NoteView() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [tagPanelOpen, setTagPanelOpen] = useState(false);
+  /** 标签联想：vault 全部已有标签（面板打开时聚合一次）+ 选中候选序号（-1 = 无选中） */
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [tagSugActive, setTagSugActive] = useState(-1);
   // 文件夹归属：folder 为 notes/ 相对路径（"" 根目录）；folderPanel 打开时才拉取目录列表
   const [folder, setFolder] = useState('');
   const [folderPanelOpen, setFolderPanelOpen] = useState(false);
@@ -576,6 +579,44 @@ export default function NoteView() {
     if (v && !tags.includes(v)) saveTags([...tags, v]);
     setTagInput('');
   }, [tagInput, tags, saveTags]);
+
+  // 打开标签面板时聚合 vault 全部已有标签（联想候选全集；NoteMeta.tags 去重，
+  // 与主界面 tagCounts 同款做法；会话内缓存，下次打开面板自然拿到最新）
+  useEffect(() => {
+    if (!tagPanelOpen) return;
+    notesApi
+      .list()
+      .then((list) => {
+        const s = new Set<string>();
+        for (const n of list) for (const tag of n.tags ?? []) s.add(tag);
+        setAllTags([...s]);
+      })
+      .catch(() => setAllTags([]));
+  }, [tagPanelOpen]);
+
+  // 联想候选：大小写不敏感包含匹配，排除本便签已有标签；前缀命中优先 → 字母序，上限 6 条
+  const tagSuggestions = useMemo(() => {
+    const q = tagInput.trim().toLowerCase();
+    if (!q) return [];
+    return allTags
+      .filter((tag) => !tags.includes(tag) && tag.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const ap = a.toLowerCase().startsWith(q) ? 0 : 1;
+        const bp = b.toLowerCase().startsWith(q) ? 0 : 1;
+        return ap - bp || a.localeCompare(b);
+      })
+      .slice(0, 6);
+  }, [tagInput, allTags, tags]);
+
+  // 采用联想候选（Enter 选中与鼠标点击共用）
+  const adoptTagSuggestion = useCallback(
+    (tag: string) => {
+      if (!tags.includes(tag)) saveTags([...tags, tag]);
+      setTagInput('');
+      setTagSugActive(-1);
+    },
+    [tags, saveTags],
+  );
 
   // 打开文件夹面板时拉取目录列表（候选全集来自服务端，天然限定 notes/ 内）
   useEffect(() => {
@@ -1577,9 +1618,29 @@ export default function NoteView() {
         </>
       )}
 
-      {/* 标签面板：chips + 输入框，Enter/✓ 添加，Backspace 删尾 */}
+      {/* 标签面板：chips + 输入框，Enter/✓ 添加，Backspace 删尾；
+          输入非空时向上展开已有标签联想（↑/↓ 导航，Enter 采用） */}
       {tagPanelOpen && (
         <div className="sticky-note__tagpanel">
+          {tagSuggestions.length > 0 && (
+            <div className="sticky-note__tagsuggest">
+              {tagSuggestions.map((tag, i) => (
+                <button
+                  key={tag}
+                  className={`sticky-note__tagsuggest-item${i === tagSugActive ? ' is-active' : ''}`}
+                  /* mousedown 先于 input blur 触发，保证点击能采用 */
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    adoptTagSuggestion(tag);
+                  }}
+                  onMouseEnter={() => setTagSugActive(i)}
+                >
+                  <TagIcon />
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
           {tags.map((tag) => (
             <span key={tag} className="tag-chip">
               {tag}
@@ -1597,14 +1658,32 @@ export default function NoteView() {
             value={tagInput}
             placeholder={t('note.addTagPlaceholder')}
             autoFocus
-            onChange={(e) => setTagInput(e.target.value)}
+            onChange={(e) => {
+              setTagInput(e.target.value);
+              setTagSugActive(-1);
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                commitTag();
+              if (e.key === 'ArrowDown' && tagSuggestions.length > 0) {
+                e.preventDefault();
+                setTagSugActive((i) => (i + 1) % tagSuggestions.length);
+              } else if (e.key === 'ArrowUp' && tagSuggestions.length > 0) {
+                e.preventDefault();
+                setTagSugActive((i) => (i - 1 + tagSuggestions.length) % tagSuggestions.length);
+              } else if (e.key === 'Enter') {
+                // 有选中候选优先采用，无选中走原始输入（创建新标签能力不受联想影响）
+                const picked = tagSuggestions[tagSugActive];
+                if (tagSugActive >= 0 && picked) adoptTagSuggestion(picked);
+                else commitTag();
               } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
                 saveTags(tags.slice(0, -1));
               } else if (e.key === 'Escape') {
-                setTagPanelOpen(false);
+                // Esc 分层：联想下拉在显示先收下拉（清空输入即收），否则关面板
+                if (tagSuggestions.length > 0) {
+                  setTagInput('');
+                  setTagSugActive(-1);
+                } else {
+                  setTagPanelOpen(false);
+                }
               }
             }}
           />

@@ -1205,6 +1205,42 @@ input.sticky-note__title-input {
   padding: 2px 4px;
 }
 
+/* 标签联想下拉：面板向上展开（bottom:100%），随面板同宽；面板本身是定位上下文 */
+.sticky-note__tagsuggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.sticky-note__tagsuggest-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #333;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sticky-note__tagsuggest-item.is-active {
+  background: var(--note-titlebar-bg, #ffe97a);
+}
+
 /* 标签提交按钮：便签标题栏色托底（随主题变色），与 Enter 等效；空输入禁用 */
 .sticky-note__tagadd {
   flex: none;
@@ -2747,6 +2783,14 @@ input.sticky-note__title-input {
 
 .note-list li.note-list__dir:hover {
   border-color: #e0b93f;
+}
+
+/* 拖拽移动落点高亮（文件夹视图：子文件夹行 + 面包屑段共用） */
+.note-list li.note-list__dir.is-drop-target,
+.main-view__crumb.is-drop-target {
+  outline: 2px dashed #e0b93f;
+  outline-offset: 1px;
+  background: var(--mv-rename-bg);
 }
 
 .note-list__dir-icon {

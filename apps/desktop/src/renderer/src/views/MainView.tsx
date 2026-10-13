@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import PlusIcon from '~icons/ph/plus';
@@ -415,6 +416,49 @@ export default function MainView() {
         .catch(() => {});
     },
     [moveTarget, refresh],
+  );
+
+  // 拖拽移动（仅文件夹视图）：dragNote = 拖拽中的便签——HTML5 DnD 的 dragover 期
+  // 读不到 dataTransfer 内容（安全限制），拖拽便签身份存 React state；
+  // dropTarget = 当前高亮落点路径（'' = 根目录）
+  const [dragNote, setDragNote] = useState<NoteMeta | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  /** 落点有效性：拖到便签当前所在文件夹无效；inbox 速记任何目标都有效（移入即脱离速记身份） */
+  const isValidDrop = useCallback(
+    (target: string) => !!dragNote && !(!dragNote.inbox && (dragNote.folder ?? '') === target),
+    [dragNote],
+  );
+
+  /** 落点公共 handler 生成器：子文件夹行与面包屑段共用 */
+  const dropTargetHandlers = useCallback(
+    (target: string) => ({
+      onDragOver: (e: DragEvent) => {
+        if (!dragNote) return;
+        if (!isValidDrop(target)) {
+          e.dataTransfer.dropEffect = 'none';
+          return;
+        }
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDropTarget(target);
+      },
+      onDragLeave: () => setDropTarget((cur) => (cur === target ? null : cur)),
+      onDrop: (e: DragEvent) => {
+        e.preventDefault();
+        setDropTarget(null);
+        if (!dragNote || !isValidDrop(target)) return;
+        notesApi
+          .move(dragNote.id, target)
+          .then(() => {
+            window.api.notifyNotesChanged();
+            refresh();
+          })
+          .catch(() => refresh());
+        setDragNote(null);
+      },
+    }),
+    [dragNote, isValidDrop, refresh],
   );
 
   // 启动检查保险库：已设置 → 列表模式；未设置 → 引导选择
@@ -1077,11 +1121,30 @@ export default function MainView() {
   // 交互反转（add-list-note-preview）：单击切换摘要 3 行 ↔ 10 行（手风琴），
   // 打开便签走双击 / 中键 / 右侧「打开」按钮；无摘要（空白便签）时单击回退打开。
   // showFolder：列表视图平铺全部便签，需要标注所在文件夹。
-  const renderNoteItem = (note: NoteMeta, showFolder = false) => (
+  // draggableNote：仅文件夹视图启用拖拽移动（落点 = 子文件夹行/面包屑段）
+  const renderNoteItem = (note: NoteMeta, showFolder = false, draggableNote = false) => (
     <li
       key={note.id}
       className="note-list__note"
       data-color={note.color || 'yellow'}
+      draggable={draggableNote}
+      onDragStart={
+        draggableNote
+          ? (e) => {
+              e.dataTransfer.setData('text/plain', note.id);
+              e.dataTransfer.effectAllowed = 'move';
+              setDragNote(note);
+            }
+          : undefined
+      }
+      onDragEnd={
+        draggableNote
+          ? () => {
+              setDragNote(null);
+              setDropTarget(null);
+            }
+          : undefined
+      }
       onClick={(e) => {
         // e.detail > 1 是双击的第二次 click，交给 onDoubleClick 处理
         if (e.detail > 1) return;
@@ -2037,8 +2100,9 @@ export default function MainView() {
       {!hits && view === 'folders' && (
         <div className="main-view__crumbs">
           <button
-            className={`main-view__crumb${currentFolder === '' ? ' is-here' : ''}`}
+            className={`main-view__crumb${currentFolder === '' ? ' is-here' : ''}${dropTarget === '' ? ' is-drop-target' : ''}`}
             onClick={() => enterFolder('')}
+            {...dropTargetHandlers('')}
           >
             {t('folders.all')}
           </button>
@@ -2061,9 +2125,10 @@ export default function MainView() {
             <span key={c.path} className="main-view__crumb-seg">
               <span className="main-view__crumb-sep">/</span>
               <button
-                className={`main-view__crumb${c.path === currentFolder ? ' is-here' : ''}`}
+                className={`main-view__crumb${c.path === currentFolder ? ' is-here' : ''}${dropTarget === c.path ? ' is-drop-target' : ''}`}
                 title={c.path}
                 onClick={() => enterFolder(c.path)}
+                {...dropTargetHandlers(c.path)}
               >
                 {c.name}
               </button>
@@ -2186,8 +2251,9 @@ export default function MainView() {
             {childFolders.map((f) => (
               <li
                 key={`dir:${f}`}
-                className="note-list__dir"
+                className={`note-list__dir${dropTarget === f ? ' is-drop-target' : ''}`}
                 onClick={() => renamingFolder !== f && enterFolder(f)}
+                {...dropTargetHandlers(f)}
               >
                 {renamingFolder === f ? (
                   /* 行内重命名：Enter 确认 / Esc 取消，失焦等价取消 */
@@ -2233,7 +2299,7 @@ export default function MainView() {
                 </button>
               </li>
             ))}
-            {layerNotes.map((note) => renderNoteItem(note))}
+            {layerNotes.map((note) => renderNoteItem(note, false, true))}
             {layerNotes.length === 0 && childFolders.length === 0 && !error && (
               <li className="note-list__empty">
                 {currentFolder ? t('folders.empty') : emptyNoteHint}

@@ -113,6 +113,18 @@ export class WindowManager {
     });
     this.noteWindows.set(id, win);
     this.syncOpenNotes();
+    // 新窗创建/show 可能把其他置顶便签踢出置顶带（见 reassertPinnedNotes）
+    win.once('show', () => this.reassertPinnedNotes());
+    // 置顶自愈补充（Windows）：便签获焦时重断言自身 topmost。第三方软件
+    // （如桌宠 Desktop Mate）会间歇性拦截 z-order 变更（实测 SetWindowPos
+    // 返回成功但 TOPMOST 设不上，持续数秒后自行恢复）——失效是瞬时的，
+    // 失效窗口过去后用户点一下便签即自愈；只重断言自己，顺带把它抬到
+    // 置顶带最前，正好符合点击直觉。重排 siblings 的代价也没有
+    win.on('focus', () => {
+      if (process.platform === 'win32' && !win.isDestroyed() && win.isAlwaysOnTop()) {
+        win.setAlwaysOnTop(true);
+      }
+    });
     // 几何校正：组成员重开/会话恢复后瞬移归位（非成员 no-op；位置已正确时
     // restack 早退）。instant：启动/重开不该看到便签滑动
     this.groupManager.restackOf(id, undefined, { instant: true });
@@ -182,6 +194,25 @@ export class WindowManager {
     // 取消置顶 = 自动退组（组是置顶层概念）；removeMember 内存态即时生效，
     // 持久化后台 fire-and-forget
     if (!pinned) this.groupManager.removeMember(noteId);
+  }
+
+  /** 置顶自愈（仅 Windows）：RDP 会话重连/解锁、睡眠恢复、显示器变更、
+   *  新窗口创建后，系统可能静默丢失 topmost（RDS z-order 缺陷、Win11 置顶
+   *  堆叠 bug、Electron 多窗互踩 electron#31536），表现为置顶便签沉底且
+   *  点击抬不起来。对全部置顶态便签重断言一次 setAlwaysOnTop(true)——
+   *  Electron→views→HWNDMessageHandler 链路无缓存直发
+   *  SetWindowPos(HWND_TOPMOST)，无需 false→true 翻转（翻转会踩 #31536）。
+   *  代价：便签在置顶带内的相对次序按重断言顺序重排，罕见事件下可接受 */
+  reassertPinnedNotes(): void {
+    if (process.platform !== 'win32') return;
+    let count = 0;
+    for (const win of this.noteWindows.values()) {
+      if (!win.isDestroyed() && win.isAlwaysOnTop()) {
+        win.setAlwaysOnTop(true);
+        count += 1;
+      }
+    }
+    if (count > 0) console.log(`[note] reassert always-on-top: ${count} window(s)`);
   }
 
   /** 便签当前组态（渲染层挂载时主动拉取：关窗保留组成员，重开回归恢复拼框） */
@@ -310,6 +341,8 @@ export class WindowManager {
       return;
     }
     this.quickCaptureWindow = createQuickCaptureWindow();
+    // 速记窗自身是置顶窗，show 时可能踩掉便签的 topmost（见 reassertPinnedNotes）
+    this.quickCaptureWindow.once('show', () => this.reassertPinnedNotes());
     this.quickCaptureWindow.on('closed', () => {
       this.quickCaptureWindow = null;
     });
@@ -323,6 +356,8 @@ export class WindowManager {
       return;
     }
     this.mainWindow = createMainWindow();
+    // 主窗口每次从隐藏恢复显示都补一轮置顶断言（见 reassertPinnedNotes）
+    this.mainWindow.on('show', () => this.reassertPinnedNotes());
     // 关闭主窗口 = 隐藏到托盘（保留列表滚动/搜索状态，托盘秒开）；
     // 应用真正退出时（quitting）放行关闭；
     // 托盘关闭（高级设置）时没有「隐藏到托盘」的去处——同样放行真实关闭，

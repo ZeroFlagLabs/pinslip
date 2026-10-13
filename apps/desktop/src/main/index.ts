@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, net, protocol } from 'electron';
+import { app, BrowserWindow, nativeTheme, net, powerMonitor, protocol, screen } from 'electron';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -68,6 +68,21 @@ app.whenReady().then(() => {
     }
   });
   initMainI18n(); // 主进程 i18n（托盘/更新文案），须在 createTray 之前
+  // 置顶自愈触发点（Windows）：睡眠恢复、会话解锁（RDP 重连必经）、显示器
+  // 变更后 topmost 可能被系统静默丢弃（见 WindowManager.reassertPinnedNotes）。
+  // 显示器事件可能连发，统一 300ms 防抖
+  if (process.platform === 'win32') {
+    let reassertTimer: NodeJS.Timeout | null = null;
+    const scheduleReassert = () => {
+      if (reassertTimer) clearTimeout(reassertTimer);
+      reassertTimer = setTimeout(() => windowManager.reassertPinnedNotes(), 300);
+    };
+    powerMonitor.on('resume', scheduleReassert);
+    powerMonitor.on('unlock-screen', scheduleReassert);
+    screen.on('display-metrics-changed', scheduleReassert);
+    screen.on('display-added', scheduleReassert);
+    screen.on('display-removed', scheduleReassert);
+  }
   // 托盘图标可在「高级设置」关闭：关闭时启动不创建托盘（运行中切换走 IPC 立即应用）
   if (getAdvanced().trayIcon) createTray(windowManager);
   registerShortcuts(windowManager);
