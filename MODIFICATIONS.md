@@ -40,6 +40,19 @@ modified installation.
 The original download-page button remains available for manually checking
 official PinSlip releases.
 
+### Windows note data-loss fix (r2)
+
+Fixed a bug where changing only the capitalisation of a note title
+could delete the underlying Markdown file on Windows.
+
+- Check whether old and new paths refer to the same physical file.
+- Avoid deleting the newly saved file during case-only title changes.
+- Add a regression test covering this behaviour.
+- All Go tests pass.
+
+Upstream bug report: https://github.com/homerious/pinslip/issues/20
+
+Upstream pull request: https://github.com/homerious/pinslip/pull/21
 ## Base Version
 
 PinSlip v1.0.1
@@ -48,11 +61,11 @@ Modified branch:
 
 `modified-launch-behaviour`
 
-Modified release tag:
+Original modified release tag:
 
 `modified-v1.0.1`
 
-## Installer
+## Original installer
 
 `PinSlip-Setup-1.0.1-Modified.exe`
 
@@ -62,12 +75,26 @@ SHA-256:
 
 The installer has been tested on multiple Windows PCs.
 
+## Corrected installer (r2)
+
+Release tag: `modified-v1.0.1-r2`
+
+Installer: `PinSlip-Setup-1.0.1-Modified-r2.exe`
+
+SHA-256:
+
+`4AA3FE64AA813A77A156892951E482565C3C6B3C529216323FEBBD09F9FF051A`
+
+This release includes the original modifications and the Windows
+case-only title data-loss fix.
 ## Modified Files
 
-Application behaviour changes are contained in:
+The modified build changes these files:
 
 - `apps/desktop/src/main/index.ts`
 - `apps/desktop/src/main/updater.ts`
+- `apps/service/internal/storage/engine.go`
+- `apps/service/internal/storage/engine_test.go`
 
 The local `Modified Release` directory is excluded from Git.
 
