@@ -53,6 +53,18 @@ could delete the underlying Markdown file on Windows.
 Upstream bug report: https://github.com/homerious/pinslip/issues/20
 
 Upstream pull request: https://github.com/homerious/pinslip/pull/21
+
+### Windows login taskbar focus fix (r3)
+
+Fixed an issue where restored notes triggered red/orange taskbar
+attention indicators when PinSlip started at Windows login.
+
+- Restored notes now use Electron's showInactive() method.
+- Notes appear without requesting foreground focus.
+- Newly created and manually opened notes retain normal focus behaviour.
+- Confirmed working after a Windows reboot.
+- TypeScript validation and application build pass.
+
 ## Base Version
 
 PinSlip v1.0.1
@@ -87,12 +99,28 @@ SHA-256:
 
 This release includes the original modifications and the Windows
 case-only title data-loss fix.
+
+## Corrected installer (r3)
+
+Release tag: `modified-v1.0.1-r3`
+
+Installer: `PinSlip-Setup-1.0.1-Modified-r3.exe`
+
+SHA-256:
+
+`13FD1B08161850D241C8759F544BBEB2B2221E0D5B6336CEB984B894D755F18A`
+
+This release includes all previous modifications, the r2 data-loss
+fix and the Windows login taskbar focus fix.
+
 ## Modified Files
 
 The modified build changes these files:
 
 - `apps/desktop/src/main/index.ts`
 - `apps/desktop/src/main/updater.ts`
+- `apps/desktop/src/main/windows/note-window.ts`
+- `apps/desktop/src/main/windows/window-manager.ts`
 - `apps/service/internal/storage/engine.go`
 - `apps/service/internal/storage/engine_test.go`
 
